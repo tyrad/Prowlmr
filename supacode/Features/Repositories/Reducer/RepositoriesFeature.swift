@@ -548,7 +548,7 @@ struct RepositoriesFeature {
       case .selectDashboard:
         state.selection = .dashboard
         state.sidebarSelectedWorktreeIDs = []
-        return .send(.delegate(.selectedWorktreeChanged(nil)))
+        return .none
 
       case .setSidebarSelectedWorktreeIDs(let worktreeIDs):
         let validWorktreeIDs = Set(state.orderedWorktreeRows().map(\.id))

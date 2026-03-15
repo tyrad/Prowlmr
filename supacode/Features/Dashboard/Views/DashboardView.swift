@@ -5,65 +5,64 @@ struct DashboardView: View {
   @State private var layoutStore = DashboardLayoutStore()
 
   @State private var canvasOffset: CGSize = .zero
+  @State private var lastCanvasOffset: CGSize = .zero
   @State private var canvasScale: CGFloat = 1.0
+  @State private var lastCanvasScale: CGFloat = 1.0
   @State private var focusedWorktreeID: Worktree.ID?
   @State private var dragOffset: [Worktree.ID: CGSize] = [:]
-  @State private var resizeDelta: [Worktree.ID: CGSize] = [:]
+  @State private var activeResize: [Worktree.ID: ActiveResize] = [:]
 
-  private let minCardSize = CGSize(width: 300, height: 200)
-  private let maxCardSize = CGSize(width: 1200, height: 900)
+  private let minCardWidth: CGFloat = 300
+  private let minCardHeight: CGFloat = 200
+  private let maxCardWidth: CGFloat = 1200
+  private let maxCardHeight: CGFloat = 900
   private let titleBarHeight: CGFloat = 28
 
   var body: some View {
     GeometryReader { geometry in
       let activeStates = terminalManager.activeWorktreeStates
-      ZStack {
-        canvasBackground
-        ForEach(activeStates, id: \.worktreeID) { state in
-          if let surfaceView = state.activeSurfaceView {
-            let layout = effectiveLayout(for: state.worktreeID, canvasSize: geometry.size)
-            DashboardCardView(
-              repositoryName: Repository.name(for: state.repositoryRootURL),
-              worktreeName: state.worktreeName,
-              surfaceView: surfaceView,
-              isFocused: focusedWorktreeID == state.worktreeID,
-              hasUnseenNotification: state.hasUnseenNotification,
-              cardSize: effectiveCardSize(for: state.worktreeID, baseSize: layout.size),
-              onTap: { focusCard(state.worktreeID, states: activeStates) },
-              onDragPosition: { translation in dragOffset[state.worktreeID] = translation },
-              onDragPositionEnd: { commitDragPosition(for: state.worktreeID) },
-              onResizeEdge: { edge, translation in
-                handleResizeEdge(edge, translation: translation, for: state.worktreeID)
-              },
-              onResizeEdgeEnd: { commitResize(for: state.worktreeID, surfaceView: surfaceView) }
-            )
-            .position(effectivePosition(for: state.worktreeID, basePosition: layout.position))
-            .zIndex(focusedWorktreeID == state.worktreeID ? 1 : 0)
-          }
+
+      // Background layer: handles canvas pan and tap-to-unfocus.
+      // Placed first so cards are on top for hit testing.
+      Color.clear
+        .contentShape(.rect)
+        .accessibilityAddTraits(.isButton)
+        .onTapGesture { unfocusAll() }
+        .gesture(canvasPanGesture)
+
+      // Cards layer: each card is scaled and positioned individually.
+      ForEach(activeStates, id: \.worktreeID) { state in
+        if let surfaceView = state.activeSurfaceView {
+          let baseLayout = resolvedLayout(for: state.worktreeID, canvasSize: geometry.size)
+          let computed = computedFrame(for: state.worktreeID, baseLayout: baseLayout)
+          DashboardCardView(
+            repositoryName: Repository.name(for: state.repositoryRootURL),
+            worktreeName: state.worktreeName,
+            surfaceView: surfaceView,
+            isFocused: focusedWorktreeID == state.worktreeID,
+            hasUnseenNotification: state.hasUnseenNotification,
+            cardSize: computed.size,
+            onTap: { focusCard(state.worktreeID, states: activeStates) },
+            onDragPosition: { translation in dragOffset[state.worktreeID] = translation },
+            onDragPositionEnd: { commitDrag(for: state.worktreeID) },
+            onResize: { edge, translation in
+              activeResize[state.worktreeID] = ActiveResize(edge: edge, translation: translation)
+            },
+            onResizeEnd: { commitResize(for: state.worktreeID, surfaceView: surfaceView) }
+          )
+          .scaleEffect(canvasScale, anchor: .center)
+          .position(screenPosition(for: computed.center))
+          .zIndex(focusedWorktreeID == state.worktreeID ? 1 : 0)
         }
       }
-      .scaleEffect(canvasScale)
-      .offset(canvasOffset)
-      .gesture(canvasPanGesture)
-      .gesture(canvasZoomGesture)
     }
-    .onAppear { enableSurfaceOcclusion() }
-    .onDisappear { disableSurfaceOcclusion() }
-  }
-
-  // MARK: - Canvas Background
-
-  private var canvasBackground: some View {
-    Color.clear
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .contentShape(.rect)
-      .accessibilityAddTraits(.isButton)
-      .onTapGesture { unfocusAll() }
+    .contentShape(.rect)
+    .simultaneousGesture(canvasZoomGesture)
+    .task { activateDashboard() }
+    .onDisappear { deactivateDashboard() }
   }
 
   // MARK: - Canvas Gestures
-
-  @State private var lastCanvasOffset: CGSize = .zero
 
   private var canvasPanGesture: some Gesture {
     DragGesture()
@@ -81,13 +80,16 @@ struct DashboardView: View {
   private var canvasZoomGesture: some Gesture {
     MagnifyGesture()
       .onChanged { value in
-        canvasScale = max(0.25, min(2.0, value.magnification))
+        canvasScale = max(0.25, min(2.0, lastCanvasScale * value.magnification))
+      }
+      .onEnded { _ in
+        lastCanvasScale = canvasScale
       }
   }
 
-  // MARK: - Layout Calculation
+  // MARK: - Layout
 
-  private func effectiveLayout(for worktreeID: Worktree.ID, canvasSize: CGSize) -> DashboardCardLayout {
+  private func resolvedLayout(for worktreeID: Worktree.ID, canvasSize: CGSize) -> DashboardCardLayout {
     if let existing = layoutStore.cardLayouts[worktreeID] {
       return existing
     }
@@ -99,34 +101,94 @@ struct DashboardView: View {
 
   private func autoPosition(for worktreeID: Worktree.ID, canvasSize: CGSize) -> CGPoint {
     let existingCount = layoutStore.cardLayouts.count
-    let columns = max(1, Int(canvasSize.width / (DashboardCardLayout.defaultSize.width + 20)))
+    let cardW = DashboardCardLayout.defaultSize.width
+    let cardH = DashboardCardLayout.defaultSize.height + titleBarHeight
+    let spacing: CGFloat = 20
+    let columns = max(1, Int(canvasSize.width / (cardW + spacing)))
     let row = existingCount / columns
     let col = existingCount % columns
-    let spacing: CGFloat = 20
-    let totalCardWidth = DashboardCardLayout.defaultSize.width + spacing
-    let totalCardHeight = DashboardCardLayout.defaultSize.height + titleBarHeight + spacing
     return CGPoint(
-      x: spacing + totalCardWidth * CGFloat(col) + DashboardCardLayout.defaultSize.width / 2,
-      y: spacing + totalCardHeight * CGFloat(row) + (DashboardCardLayout.defaultSize.height + titleBarHeight) / 2
+      x: spacing + (cardW + spacing) * CGFloat(col) + cardW / 2,
+      y: spacing + (cardH + spacing) * CGFloat(row) + cardH / 2
     )
   }
 
-  private func effectivePosition(for worktreeID: Worktree.ID, basePosition: CGPoint) -> CGPoint {
+  /// Compute effective center and size for a card, accounting for drag and resize.
+  private func computedFrame(
+    for worktreeID: Worktree.ID,
+    baseLayout: DashboardCardLayout
+  ) -> (center: CGPoint, size: CGSize) {
+    var centerX = baseLayout.position.x
+    var centerY = baseLayout.position.y
+    var width = baseLayout.size.width
+    var height = baseLayout.size.height
+
+    // Apply drag offset (in canvas space)
     let drag = dragOffset[worktreeID] ?? .zero
-    return CGPoint(x: basePosition.x + drag.width, y: basePosition.y + drag.height)
+    centerX += drag.width
+    centerY += drag.height
+
+    // Apply resize with proper edge anchoring
+    if let resize = activeResize[worktreeID] {
+      let translationX = resize.translation.width
+      let translationY = resize.translation.height
+
+      switch resize.edge {
+      case .trailing:
+        let newW = clampWidth(width + translationX)
+        centerX += (newW - width) / 2
+        width = newW
+
+      case .leading:
+        let newW = clampWidth(width - translationX)
+        centerX -= (newW - width) / 2
+        width = newW
+
+      case .bottom:
+        let newH = clampHeight(height + translationY)
+        centerY += (newH - height) / 2
+        height = newH
+
+      case .bottomTrailing:
+        let newW = clampWidth(width + translationX)
+        let newH = clampHeight(height + translationY)
+        centerX += (newW - width) / 2
+        centerY += (newH - height) / 2
+        width = newW
+        height = newH
+
+      case .bottomLeading:
+        let newW = clampWidth(width - translationX)
+        let newH = clampHeight(height + translationY)
+        centerX -= (newW - width) / 2
+        centerY += (newH - height) / 2
+        width = newW
+        height = newH
+      }
+    }
+
+    return (CGPoint(x: centerX, y: centerY), CGSize(width: width, height: height))
   }
 
-  private func effectiveCardSize(for worktreeID: Worktree.ID, baseSize: CGSize) -> CGSize {
-    let delta = resizeDelta[worktreeID] ?? .zero
-    return CGSize(
-      width: max(minCardSize.width, min(maxCardSize.width, baseSize.width + delta.width)),
-      height: max(minCardSize.height, min(maxCardSize.height, baseSize.height + delta.height))
+  /// Convert canvas-space center to screen-space position for SwiftUI `.position()`.
+  private func screenPosition(for canvasCenter: CGPoint) -> CGPoint {
+    CGPoint(
+      x: canvasCenter.x * canvasScale + canvasOffset.width,
+      y: canvasCenter.y * canvasScale + canvasOffset.height
     )
   }
 
-  // MARK: - Drag Position
+  private func clampWidth(_ width: CGFloat) -> CGFloat {
+    max(minCardWidth, min(maxCardWidth, width))
+  }
 
-  private func commitDragPosition(for worktreeID: Worktree.ID) {
+  private func clampHeight(_ height: CGFloat) -> CGFloat {
+    max(minCardHeight, min(maxCardHeight, height))
+  }
+
+  // MARK: - Drag
+
+  private func commitDrag(for worktreeID: Worktree.ID) {
     guard let drag = dragOffset[worktreeID] else { return }
     if var layout = layoutStore.cardLayouts[worktreeID] {
       layout.position.x += drag.width
@@ -138,48 +200,30 @@ struct DashboardView: View {
 
   // MARK: - Resize
 
-  private func handleResizeEdge(
-    _ edge: DashboardCardView.CardEdge,
-    translation: CGSize,
-    for worktreeID: Worktree.ID
-  ) {
-    switch edge {
-    case .trailing:
-      resizeDelta[worktreeID] = CGSize(width: translation.width, height: 0)
-    case .leading:
-      resizeDelta[worktreeID] = CGSize(width: -translation.width, height: 0)
-    case .bottom:
-      resizeDelta[worktreeID] = CGSize(width: 0, height: translation.height)
-    }
-  }
-
   private func commitResize(for worktreeID: Worktree.ID, surfaceView: GhosttySurfaceView) {
-    guard let delta = resizeDelta[worktreeID] else { return }
+    guard let resize = activeResize[worktreeID] else { return }
     if var layout = layoutStore.cardLayouts[worktreeID] {
-      let newSize = CGSize(
-        width: max(minCardSize.width, min(maxCardSize.width, layout.size.width + delta.width)),
-        height: max(minCardSize.height, min(maxCardSize.height, layout.size.height + delta.height)),
-      )
-      layout.size = newSize
+      let computed = computedFrame(for: worktreeID, baseLayout: layout)
+      layout.position = computed.center
+      layout.size = computed.size
       layoutStore.cardLayouts[worktreeID] = layout
     }
-    resizeDelta[worktreeID] = nil
+    activeResize[worktreeID] = nil
     surfaceView.needsLayout = true
     surfaceView.needsDisplay = true
   }
 
-  // MARK: - Focus Management
+  // MARK: - Focus
 
   private func focusCard(_ worktreeID: Worktree.ID, states: [WorktreeTerminalState]) {
     let previousID = focusedWorktreeID
     focusedWorktreeID = worktreeID
 
-    if let previousID, previousID != worktreeID {
-      if let previousState = states.first(where: { $0.worktreeID == previousID }),
-        let previousSurface = previousState.activeSurfaceView
-      {
-        previousSurface.focusDidChange(false)
-      }
+    if let previousID, previousID != worktreeID,
+      let previousState = states.first(where: { $0.worktreeID == previousID }),
+      let previousSurface = previousState.activeSurfaceView
+    {
+      previousSurface.focusDidChange(false)
     }
 
     if let currentState = states.first(where: { $0.worktreeID == worktreeID }),
@@ -193,8 +237,7 @@ struct DashboardView: View {
   private func unfocusAll() {
     guard let previousID = focusedWorktreeID else { return }
     focusedWorktreeID = nil
-    let states = terminalManager.activeWorktreeStates
-    if let state = states.first(where: { $0.worktreeID == previousID }),
+    if let state = terminalManager.activeWorktreeStates.first(where: { $0.worktreeID == previousID }),
       let surface = state.activeSurfaceView
     {
       surface.focusDidChange(false)
@@ -203,20 +246,27 @@ struct DashboardView: View {
 
   // MARK: - Occlusion
 
-  private func enableSurfaceOcclusion() {
+  private func activateDashboard() {
+    // First occlude and unfocus ALL surfaces across all worktrees
     for state in terminalManager.activeWorktreeStates {
-      if let surfaceView = state.activeSurfaceView {
-        surfaceView.setOcclusion(true)
-      }
+      state.setAllSurfacesOccluded()
+    }
+    // Then make dashboard surfaces visible (not focused until clicked)
+    for state in terminalManager.activeWorktreeStates {
+      state.activeSurfaceView?.setOcclusion(true)
     }
   }
 
-  private func disableSurfaceOcclusion() {
+  private func deactivateDashboard() {
+    focusedWorktreeID = nil
     for state in terminalManager.activeWorktreeStates {
-      if let surfaceView = state.activeSurfaceView {
-        surfaceView.setOcclusion(false)
-        surfaceView.focusDidChange(false)
-      }
+      state.activeSurfaceView?.setOcclusion(false)
+      state.activeSurfaceView?.focusDidChange(false)
     }
   }
+}
+
+private struct ActiveResize {
+  let edge: DashboardCardView.CardResizeEdge
+  var translation: CGSize
 }

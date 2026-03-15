@@ -11,15 +11,17 @@ struct DashboardCardView: View {
   let onTap: () -> Void
   let onDragPosition: (CGSize) -> Void
   let onDragPositionEnd: () -> Void
-  let onResizeEdge: (CardEdge, CGSize) -> Void
-  let onResizeEdgeEnd: () -> Void
+  let onResize: (CardResizeEdge, CGSize) -> Void
+  let onResizeEnd: () -> Void
 
-  enum CardEdge {
+  enum CardResizeEdge {
     case leading, trailing, bottom
+    case bottomLeading, bottomTrailing
   }
 
   private let titleBarHeight: CGFloat = 28
-  private let resizeHandleThickness: CGFloat = 6
+  private let edgeThickness: CGFloat = 6
+  private let cornerSize: CGFloat = 12
   private let cornerRadius: CGFloat = 8
 
   var body: some View {
@@ -62,12 +64,8 @@ struct DashboardCardView: View {
     .background(.bar)
     .gesture(
       DragGesture()
-        .onChanged { value in
-          onDragPosition(value.translation)
-        }
-        .onEnded { _ in
-          onDragPositionEnd()
-        }
+        .onChanged { value in onDragPosition(value.translation) }
+        .onEnded { _ in onDragPositionEnd() }
     )
   }
 
@@ -77,51 +75,82 @@ struct DashboardCardView: View {
       .allowsHitTesting(isFocused)
   }
 
+  // MARK: - Resize Handles
+
   private var resizeHandles: some View {
     ZStack {
-      ResizeHandle(cursor: .resizeLeftRight, alignment: .leading) { translation in
-        onResizeEdge(.leading, translation)
-      } onEnd: {
-        onResizeEdgeEnd()
+      // Edge handles
+      edgeHandle(.resizeLeftRight, alignment: .leading) { translation in
+        onResize(.leading, translation)
+      }
+      edgeHandle(.resizeLeftRight, alignment: .trailing) { translation in
+        onResize(.trailing, translation)
+      }
+      edgeHandle(.resizeUpDown, alignment: .bottom) { translation in
+        onResize(.bottom, translation)
       }
 
-      ResizeHandle(cursor: .resizeLeftRight, alignment: .trailing) { translation in
-        onResizeEdge(.trailing, translation)
-      } onEnd: {
-        onResizeEdgeEnd()
+      // Corner handles
+      cornerHandle(alignment: .bottomLeading) { translation in
+        onResize(.bottomLeading, translation)
       }
-
-      ResizeHandle(cursor: .resizeUpDown, alignment: .bottom) { translation in
-        onResizeEdge(.bottom, translation)
-      } onEnd: {
-        onResizeEdgeEnd()
+      cornerHandle(alignment: .bottomTrailing) { translation in
+        onResize(.bottomTrailing, translation)
       }
     }
   }
+
+  private func edgeHandle(
+    _ cursor: NSCursor,
+    alignment: Alignment,
+    onChange: @escaping (CGSize) -> Void
+  ) -> some View {
+    let isVertical = alignment == .leading || alignment == .trailing
+    return ResizeCursorView(cursor: cursor) {
+      Color.clear
+        .frame(
+          width: isVertical ? edgeThickness : nil,
+          height: isVertical ? nil : edgeThickness
+        )
+        .frame(
+          maxWidth: isVertical ? nil : .infinity,
+          maxHeight: isVertical ? .infinity : nil
+        )
+        .contentShape(.rect)
+        .gesture(
+          DragGesture()
+            .onChanged { value in onChange(value.translation) }
+            .onEnded { _ in onResizeEnd() }
+        )
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
+  }
+
+  private func cornerHandle(
+    alignment: Alignment,
+    onChange: @escaping (CGSize) -> Void
+  ) -> some View {
+    ResizeCursorView(cursor: .crosshair) {
+      Color.clear
+        .frame(width: cornerSize, height: cornerSize)
+        .contentShape(.rect)
+        .gesture(
+          DragGesture()
+            .onChanged { value in onChange(value.translation) }
+            .onEnded { _ in onResizeEnd() }
+        )
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
+  }
 }
 
-private struct ResizeHandle: View {
+private struct ResizeCursorView<Content: View>: View {
   let cursor: NSCursor
-  let alignment: Alignment
-  let onChange: (CGSize) -> Void
-  let onEnd: () -> Void
-
+  @ViewBuilder let content: Content
   @State private var isHovered = false
 
-  private let thickness: CGFloat = 6
-
   var body: some View {
-    let isVerticalEdge = alignment == .leading || alignment == .trailing
-    Color.clear
-      .frame(
-        width: isVerticalEdge ? thickness : nil,
-        height: isVerticalEdge ? nil : thickness
-      )
-      .frame(
-        maxWidth: isVerticalEdge ? nil : .infinity,
-        maxHeight: isVerticalEdge ? .infinity : nil
-      )
-      .contentShape(.rect)
+    content
       .onHover { hovering in
         guard hovering != isHovered else { return }
         isHovered = hovering
@@ -137,11 +166,5 @@ private struct ResizeHandle: View {
           NSCursor.pop()
         }
       }
-      .gesture(
-        DragGesture()
-          .onChanged { value in onChange(value.translation) }
-          .onEnded { _ in onEnd() }
-      )
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
   }
 }
