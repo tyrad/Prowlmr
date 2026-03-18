@@ -33,6 +33,51 @@ struct CanvasCardLayout: Codable, Equatable, Hashable, Sendable {
   }
 }
 
+struct CanvasWaterfallPacker {
+  var spacing: CGFloat
+  var titleBarHeight: CGFloat
+
+  struct CardInfo {
+    var key: String
+    var size: CGSize
+  }
+
+  struct Result {
+    var layouts: [String: CanvasCardLayout]
+    var totalHeight: CGFloat
+  }
+
+  /// Pack cards into a fixed number of equal-width columns using the waterfall
+  /// rule: each card drops into whichever column is currently shortest.
+  func pack(
+    cards: [CardInfo],
+    columns: Int,
+    columnWidth: CGFloat
+  ) -> Result {
+    var columnHeights = Array(repeating: spacing, count: columns)
+    var layouts: [String: CanvasCardLayout] = [:]
+
+    for card in cards {
+      let col = columnHeights.enumerated().min(by: { $0.element < $1.element })!.offset
+      let totalCardHeight = card.size.height + titleBarHeight
+
+      let slotX = spacing + CGFloat(col) * (columnWidth + spacing)
+      let centerX = slotX + columnWidth / 2
+      let centerY = columnHeights[col] + totalCardHeight / 2
+
+      layouts[card.key] = CanvasCardLayout(
+        position: CGPoint(x: centerX, y: centerY),
+        size: card.size
+      )
+
+      columnHeights[col] += totalCardHeight + spacing
+    }
+
+    let totalHeight = columnHeights.max() ?? spacing
+    return Result(layouts: layouts, totalHeight: totalHeight)
+  }
+}
+
 @MainActor
 @Observable
 final class CanvasLayoutStore {

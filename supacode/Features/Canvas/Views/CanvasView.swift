@@ -263,19 +263,20 @@ struct CanvasView: View {
     let keys = collectCardKeys(from: terminalManager.activeWorktreeStates)
     guard !keys.isEmpty, viewportSize.width > 0, viewportSize.height > 0 else { return }
 
-    let cardInfos: [(key: String, size: CGSize)] = keys.map { key in
+    let cards: [CanvasWaterfallPacker.CardInfo] = keys.map { key in
       let size = layoutStore.cardLayouts[key]?.size ?? CanvasCardLayout.defaultSize
-      return (key, size)
+      return CanvasWaterfallPacker.CardInfo(key: key, size: size)
     }
 
+    let packer = waterfallPacker
     let targetRatio = viewportSize.width / viewportSize.height
-    let columnWidth = cardInfos.map(\.size.width).max() ?? CanvasCardLayout.defaultSize.width
+    let columnWidth = cards.map(\.size.width).max() ?? CanvasCardLayout.defaultSize.width
 
     var bestResult: [String: CanvasCardLayout]?
     var bestRatioDiff = CGFloat.infinity
 
     for cols in 1...keys.count {
-      let result = waterfallPack(cardInfos: cardInfos, columns: cols, columnWidth: columnWidth)
+      let result = packer.pack(cards: cards, columns: cols, columnWidth: columnWidth)
 
       let totalWidth = CGFloat(cols) * (columnWidth + cardSpacing) + cardSpacing
       let ratio = totalWidth / result.totalHeight
@@ -295,35 +296,8 @@ struct CanvasView: View {
     }
   }
 
-  /// Pack cards into a fixed number of equal-width columns using the waterfall
-  /// rule: each card drops into whichever column is currently shortest.
-  private func waterfallPack(
-    cardInfos: [(key: String, size: CGSize)],
-    columns: Int,
-    columnWidth: CGFloat
-  ) -> (layouts: [String: CanvasCardLayout], totalHeight: CGFloat) {
-    var columnHeights = Array(repeating: cardSpacing, count: columns)
-    var layouts = layoutStore.cardLayouts
-
-    for (key, cardSize) in cardInfos {
-      let col = columnHeights.enumerated().min(by: { $0.element < $1.element })!.offset
-      let totalCardHeight = cardSize.height + titleBarHeight
-
-      // Center the card horizontally within its column slot.
-      let slotX = cardSpacing + CGFloat(col) * (columnWidth + cardSpacing)
-      let centerX = slotX + columnWidth / 2
-      let centerY = columnHeights[col] + totalCardHeight / 2
-
-      layouts[key] = CanvasCardLayout(
-        position: CGPoint(x: centerX, y: centerY),
-        size: cardSize
-      )
-
-      columnHeights[col] += totalCardHeight + cardSpacing
-    }
-
-    let totalHeight = columnHeights.max() ?? cardSpacing
-    return (layouts, totalHeight)
+  private var waterfallPacker: CanvasWaterfallPacker {
+    CanvasWaterfallPacker(spacing: cardSpacing, titleBarHeight: titleBarHeight)
   }
 
   /// Adjust scale and offset so all cards fit within the viewport.
