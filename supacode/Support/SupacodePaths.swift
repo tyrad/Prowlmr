@@ -9,7 +9,7 @@ nonisolated enum SupacodePaths {
     if !FileManager.default.fileExists(atPath: prowlDir.path(percentEncoded: false)),
       FileManager.default.fileExists(atPath: legacyDir.path(percentEncoded: false))
     {
-      try? FileManager.default.moveItem(at: legacyDir, to: prowlDir)
+      try? FileManager.default.copyItem(at: legacyDir, to: prowlDir)
     }
     return prowlDir
   }
