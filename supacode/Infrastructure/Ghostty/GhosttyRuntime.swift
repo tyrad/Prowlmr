@@ -23,6 +23,7 @@ final class GhosttyRuntime {
   private var surfaceRefs: [SurfaceReference] = []
   private var lastColorScheme: ghostty_color_scheme_e?
   var onConfigChange: (() -> Void)?
+  var onQuit: (() -> Void)?
 
   init() {
     guard let config = Self.loadConfig() else {
@@ -373,10 +374,31 @@ final class GhosttyRuntime {
       openGhosttyConfig()
       return true
     }
+    if action.tag == GHOSTTY_ACTION_QUIT {
+      if let runtime = runtime(fromApp: app) {
+        runtime.onQuit?()
+      }
+      return true
+    }
+    if action.tag == GHOSTTY_ACTION_CLOSE_WINDOW {
+      closeWindow(target: target)
+      return true
+    }
     guard target.tag == GHOSTTY_TARGET_SURFACE else { return false }
     guard let surface = target.target.surface else { return false }
     guard let bridge = surfaceBridge(fromSurface: surface) else { return false }
     return bridge.handleAction(target: target, action: action)
+  }
+
+  private static func closeWindow(target: ghostty_target_s) {
+    switch target.tag {
+    case GHOSTTY_TARGET_SURFACE:
+      guard let surface = target.target.surface else { return }
+      guard let bridge = surfaceBridge(fromSurface: surface) else { return }
+      bridge.surfaceView?.window?.close()
+    default:
+      break
+    }
   }
 
   private static func openGhosttyConfig() {
