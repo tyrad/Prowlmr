@@ -3,6 +3,7 @@ import SwiftUI
 
 struct NotificationsSettingsView: View {
   @Bindable var store: StoreOf<SettingsFeature>
+  @State private var thresholdText = ""
 
   var body: some View {
     VStack(alignment: .leading) {
@@ -38,18 +39,23 @@ struct NotificationsSettingsView: View {
           if store.commandFinishedNotificationEnabled {
             LabeledContent("Duration threshold") {
               HStack(spacing: 4) {
-                TextField(
-                  "",
-                  value: $store.commandFinishedNotificationThreshold,
-                  format: .number.grouping(.never)
-                )
-                .frame(width: 40)
-                .multilineTextAlignment(.trailing)
+                TextField("", text: $thresholdText)
+                  .frame(width: 40)
+                  .multilineTextAlignment(.trailing)
+                  .onSubmit {
+                    store.send(.setCommandFinishedNotificationThreshold(thresholdText))
+                  }
+                  .onChange(of: store.commandFinishedNotificationThreshold) { _, newValue in
+                    thresholdText = String(newValue)
+                  }
                 Text("seconds")
                   .foregroundStyle(.secondary)
               }
             }
             .help("Minimum command duration in seconds before a notification is shown")
+            .onAppear {
+              thresholdText = String(store.commandFinishedNotificationThreshold)
+            }
           }
         }
       }

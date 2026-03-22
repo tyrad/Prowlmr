@@ -84,6 +84,7 @@ struct SettingsFeature {
     case settingsLoaded(GlobalSettings)
     case setSelection(SettingsSection?)
     case setSystemNotificationsEnabled(Bool)
+    case setCommandFinishedNotificationThreshold(String)
     case showNotificationPermissionAlert(errorMessage: String?)
     case repositorySettings(RepositorySettingsFeature.Action)
     case alert(PresentationAction<Alert>)
@@ -157,6 +158,14 @@ struct SettingsFeature {
         let defaultWorktreeBaseDirectoryPath = state.globalSettings.defaultWorktreeBaseDirectoryPath
         state.repositorySettings?.globalDefaultWorktreeBaseDirectoryPath =
           defaultWorktreeBaseDirectoryPath
+        return persist(state)
+
+      case .setCommandFinishedNotificationThreshold(let text):
+        if let parsed = Int(text) {
+          state.commandFinishedNotificationThreshold = min(max(parsed, 0), 600)
+        } else {
+          state.commandFinishedNotificationThreshold = 10
+        }
         return persist(state)
 
       case .setSystemNotificationsEnabled(let isEnabled):
