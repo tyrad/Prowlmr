@@ -36,19 +36,12 @@ struct NotificationsSettingsView: View {
           )
           .help("Show a notification when a command exceeds the duration threshold")
           if store.commandFinishedNotificationEnabled {
-            HStack {
-              Text("Duration threshold")
-              Spacer()
-              TextField(
-                "Seconds",
-                value: $store.commandFinishedNotificationThreshold,
-                format: .number
-              )
-              .frame(width: 60)
-              .multilineTextAlignment(.trailing)
-              Text("seconds")
-                .foregroundStyle(.secondary)
-            }
+            Stepper(
+              "Duration threshold: \(store.commandFinishedNotificationThreshold)s",
+              value: $store.commandFinishedNotificationThreshold,
+              in: 1...600,
+              step: 5
+            )
             .help("Minimum command duration in seconds before a notification is shown")
           }
         }
