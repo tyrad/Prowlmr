@@ -470,7 +470,8 @@ final class WorktreeTerminalState {
     }
   }
 
-  func performSplitOperation(_ operation: TerminalSplitTreeView.Operation, in tabId: TerminalTabID) {
+  func performSplitOperation(_ operation: TerminalSplitTreeView.Operation, in tabId: TerminalTabID)
+  {
     guard var tree = trees[tabId] else { return }
 
     switch operation {
@@ -511,23 +512,6 @@ final class WorktreeTerminalState {
     for surface in surfaces.values {
       surface.setOcclusion(false)
       surface.focusDidChange(false)
-    }
-  }
-
-  /// Invalidate every surface's occlusion cache, then re-apply the correct
-  /// tab-view occlusion state: only the selected tab's surfaces are visible.
-  ///
-  /// Use this after the surface NSViews have been re-parented (e.g. canvas →
-  /// tab transition) to ensure Ghostty's C layer receives a fresh occlusion
-  /// signal and resumes rendering.
-  func refreshOcclusion() {
-    let selectedTabId = tabManager.selectedTabId
-    for (tabId, tree) in trees {
-      let isSelected = tabId == selectedTabId
-      for surface in tree.leaves() {
-        surface.invalidateOcclusionCache()
-        surface.setOcclusion(isSelected)
-      }
     }
   }
 
