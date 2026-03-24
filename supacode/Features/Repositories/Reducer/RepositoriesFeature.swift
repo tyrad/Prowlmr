@@ -2714,19 +2714,30 @@ struct RepositoriesFeature {
           let normalizedPath = URL(fileURLWithPath: entry.path)
             .standardizedFileURL
             .path(percentEncoded: false)
-          guard entry.kind == .plain else {
-            return (index, PersistedRepositoryEntry(path: normalizedPath, kind: entry.kind))
-          }
           do {
             let repoRoot = try await gitClient.repoRoot(URL(fileURLWithPath: normalizedPath))
             let normalizedRepoRoot = repoRoot.standardizedFileURL.path(percentEncoded: false)
-            if normalizedRepoRoot == normalizedPath {
-              return (index, PersistedRepositoryEntry(path: normalizedPath, kind: .git))
+            switch entry.kind {
+            case .plain:
+              if normalizedRepoRoot == normalizedPath {
+                return (index, PersistedRepositoryEntry(path: normalizedPath, kind: .git))
+              }
+              return (index, PersistedRepositoryEntry(path: normalizedPath, kind: .plain))
+            case .git:
+              if normalizedRepoRoot == normalizedPath {
+                return (index, PersistedRepositoryEntry(path: normalizedPath, kind: .git))
+              }
+              return (index, PersistedRepositoryEntry(path: normalizedPath, kind: .plain))
             }
           } catch {
-            // Keep plain folders unchanged when Git root discovery fails.
+            if entry.kind == .git,
+              Self.isNotGitRepositoryError(error),
+              FileManager.default.fileExists(atPath: normalizedPath)
+            {
+              return (index, PersistedRepositoryEntry(path: normalizedPath, kind: .plain))
+            }
           }
-          return (index, PersistedRepositoryEntry(path: normalizedPath, kind: .plain))
+          return (index, PersistedRepositoryEntry(path: normalizedPath, kind: entry.kind))
         }
       }
 
@@ -2742,6 +2753,13 @@ struct RepositoriesFeature {
       await repositoryPersistence.saveRepositoryEntries(normalizedEntries)
     }
     return normalizedEntries
+  }
+
+  private nonisolated static func isNotGitRepositoryError(_ error: any Error) -> Bool {
+    guard case let GitClientError.commandFailed(_, message) = error else {
+      return false
+    }
+    return message.localizedCaseInsensitiveContains("not a git repository")
   }
 
   private func loadRepositories(

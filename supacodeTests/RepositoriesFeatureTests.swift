@@ -277,6 +277,90 @@ struct RepositoriesFeatureTests {
     #expect(savedEntries.value.isEmpty)
   }
 
+  @Test func loadPersistedRepositoriesAutoDowngradesGitRepoWhenItStopsBeingRepoRoot() async {
+    let root = "/tmp/repo"
+    let ancestorRoot = "/tmp"
+    let downgradedRepository = makeRepository(
+      id: root,
+      name: "repo",
+      kind: .plain,
+      worktrees: []
+    )
+    let savedEntries = LockIsolated<[[PersistedRepositoryEntry]]>([])
+
+    let store = TestStore(initialState: RepositoriesFeature.State()) {
+      RepositoriesFeature()
+    } withDependencies: {
+      $0.repositoryPersistence.loadRepositoryEntries = {
+        [PersistedRepositoryEntry(path: root, kind: .git)]
+      }
+      $0.repositoryPersistence.saveRepositoryEntries = { entries in
+        savedEntries.withValue { $0.append(entries) }
+      }
+      $0.repositoryPersistence.saveRepositorySnapshot = { _ in }
+      $0.gitClient.repoRoot = { url in
+        #expect(url.path(percentEncoded: false) == root)
+        return URL(fileURLWithPath: ancestorRoot)
+      }
+      $0.gitClient.worktrees = { url in
+        Issue.record("downgraded git entry should not load worktrees: \(url.path(percentEncoded: false))")
+        return []
+      }
+    }
+
+    await store.send(.loadPersistedRepositories)
+    await store.receive(\.repositoriesLoaded) {
+      $0.repositories = [downgradedRepository]
+      $0.repositoryRoots = [URL(fileURLWithPath: root)]
+      $0.isInitialLoadComplete = true
+    }
+    await store.receive(\.delegate.repositoriesChanged)
+    await store.finish()
+
+    #expect(
+      savedEntries.value == [[
+        PersistedRepositoryEntry(path: root, kind: .plain)
+      ]]
+    )
+  }
+
+  @Test func loadPersistedRepositoriesDoesNotDowngradeGitRepoOnUnexpectedProbeError() async {
+    let root = "/tmp/repo"
+    let worktree = makeWorktree(id: "\(root)/main", name: "main", repoRoot: root)
+    let repository = makeRepository(id: root, name: "repo", kind: .git, worktrees: [worktree])
+    let savedEntries = LockIsolated<[[PersistedRepositoryEntry]]>([])
+
+    let store = TestStore(initialState: RepositoriesFeature.State()) {
+      RepositoriesFeature()
+    } withDependencies: {
+      $0.repositoryPersistence.loadRepositoryEntries = {
+        [PersistedRepositoryEntry(path: root, kind: .git)]
+      }
+      $0.repositoryPersistence.saveRepositoryEntries = { entries in
+        savedEntries.withValue { $0.append(entries) }
+      }
+      $0.repositoryPersistence.saveRepositorySnapshot = { _ in }
+      $0.gitClient.repoRoot = { _ in
+        throw GitClientError.commandFailed(command: "wt root", message: "permission denied")
+      }
+      $0.gitClient.worktrees = { url in
+        #expect(url.path(percentEncoded: false) == root)
+        return [worktree]
+      }
+    }
+
+    await store.send(.loadPersistedRepositories)
+    await store.receive(\.repositoriesLoaded) {
+      $0.repositories = [repository]
+      $0.repositoryRoots = [URL(fileURLWithPath: root)]
+      $0.isInitialLoadComplete = true
+    }
+    await store.receive(\.delegate.repositoriesChanged)
+    await store.finish()
+
+    #expect(savedEntries.value.isEmpty)
+  }
+
   @Test func openRepositoriesAddsPlainFoldersInsteadOfRejectingThem() async {
     let repoSelection = "/tmp/repo/subdir"
     let repoRoot = "/tmp/repo"
