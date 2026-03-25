@@ -1,8 +1,6 @@
 import AppKit
 import SwiftUI
 
-private let canvasLogger = SupaLogger("Canvas")
-
 struct CanvasView: View {
   @Environment(CommandKeyObserver.self) private var commandKeyObserver
 
@@ -81,8 +79,6 @@ struct CanvasView: View {
                 showsSelectionShield: showsSelectionShield(for: tab.id),
                 onTap: {
                   let cmdHeld = NSEvent.modifierFlags.contains(.command)
-                  let short = tab.id.rawValue.uuidString.prefix(4)
-                  canvasLogger.debug("onTap: \(short) cmd=\(cmdHeld) shield=\(showsSelectionShield(for: tab.id))")
                   if cmdHeld {
                     handleSelectionShieldTap(tab.id, surfaceState: state, states: activeStates)
                   } else {
@@ -90,8 +86,6 @@ struct CanvasView: View {
                   }
                 },
                 onSelectionTap: {
-                  let short = tab.id.rawValue.uuidString.prefix(4)
-                  canvasLogger.debug("onSelectionTap: \(short) cmd=\(commandKeyObserver.isPressed)")
                   handleSelectionShieldTap(tab.id, surfaceState: state, states: activeStates)
                 },
                 onDragCommit: { translation in commitDrag(for: cardKey, translation: translation) },
@@ -486,8 +480,6 @@ struct CanvasView: View {
     surfaceState _: WorktreeTerminalState,
     states: [WorktreeTerminalState]
   ) {
-    let short = tabID.rawValue.uuidString.prefix(4)
-    canvasLogger.debug("focusSingleCard: \(short) before=\(selectionState.selectedTabIDs.count) primary=\(selectionState.primaryTabID?.rawValue.uuidString.prefix(4) ?? "nil")")
     mutateSelection(states: states) { state in
       state.focusSingle(tabID)
     }
@@ -499,16 +491,6 @@ struct CanvasView: View {
     states: [WorktreeTerminalState]
   ) {
     let cmdHeld = NSEvent.modifierFlags.contains(.command)
-    let short = tabID.rawValue.uuidString.prefix(4)
-    let action: String
-    if cmdHeld {
-      action = "toggleSelection"
-    } else if selectionState.isBroadcasting, selectionState.selectedTabIDs.contains(tabID) {
-      action = "setPrimary"
-    } else {
-      action = "focusSingle"
-    }
-    canvasLogger.debug("handleSelectionShieldTap: \(short) action=\(action) before=\(selectionState.selectedTabIDs.count)")
     mutateSelection(states: states) { state in
       if cmdHeld {
         state.toggleSelection(tabID)
@@ -518,7 +500,6 @@ struct CanvasView: View {
         state.focusSingle(tabID)
       }
     }
-    canvasLogger.debug("  after=\(selectionState.selectedTabIDs.count) primary=\(selectionState.primaryTabID?.rawValue.uuidString.prefix(4) ?? "nil")")
   }
 
   private func clearSelection(states: [WorktreeTerminalState]) {
