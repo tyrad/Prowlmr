@@ -72,7 +72,7 @@ jobs:
 
                 url \"https://github.com/onevcat/Prowl/releases/download/v#{{version}}/Prowl.dmg\"
                 name \"Prowl\"
-                desc \"Native macOS coding agent orchestrator\"
+                desc \"Coding agent orchestrator\"
                 homepage \"https://github.com/onevcat/Prowl\"
 
                 auto_updates true
@@ -94,6 +94,7 @@ jobs:
             print("Created tap/Casks/prowl.rb")
           else:
             text = path.read_text()
+            text = re.sub(r'^\s*desc\s+\".*\"\s*$', '  desc "Coding agent orchestrator"', text, flags=re.M)
             text = re.sub(r'^\s*version\s+\".*\"\s*$', f'  version \"{version}\"', text, flags=re.M)
             text = re.sub(r'^\s*sha256\s+\".*\"\s*$', f'  sha256 \"{sha}\"', text, flags=re.M)
             path.write_text(text)
