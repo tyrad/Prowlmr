@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated struct OnevcatRepositorySettings: Codable, Equatable, Sendable {
+nonisolated struct UserRepositorySettings: Codable, Equatable, Sendable {
   static let maxCustomCommands = 3
 
   var customCommands: [OnevcatCustomCommand]
 
-  static let `default` = OnevcatRepositorySettings(customCommands: [])
+  static let `default` = UserRepositorySettings(customCommands: [])
 
   private enum CodingKeys: String, CodingKey {
     case customCommands
@@ -21,8 +21,8 @@ nonisolated struct OnevcatRepositorySettings: Codable, Equatable, Sendable {
     customCommands = Self.normalizedCommands(commands)
   }
 
-  func normalized() -> OnevcatRepositorySettings {
-    OnevcatRepositorySettings(customCommands: customCommands)
+  func normalized() -> UserRepositorySettings {
+    UserRepositorySettings(customCommands: customCommands)
   }
 
   static func normalizedCommands(_ commands: [OnevcatCustomCommand]) -> [OnevcatCustomCommand] {
@@ -162,6 +162,9 @@ nonisolated struct UserCustomShortcutModifiers: Codable, Equatable, Sendable {
     !command && !shift && !option && !control
   }
 }
+
+@available(*, deprecated, renamed: "UserRepositorySettings")
+typealias OnevcatRepositorySettings = UserRepositorySettings
 
 @available(*, deprecated, renamed: "UserCustomShortcut")
 typealias OnevcatCustomShortcut = UserCustomShortcut

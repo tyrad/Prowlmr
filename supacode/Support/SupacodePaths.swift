@@ -106,7 +106,7 @@ nonisolated enum SupacodePaths {
       .appending(path: "prowl.json", directoryHint: .notDirectory)
   }
 
-  static func onevcatRepositorySettingsURL(for rootURL: URL) -> URL {
+  static func userRepositorySettingsURL(for rootURL: URL) -> URL {
     repositorySettingsDirectory(for: rootURL)
       .appending(path: "prowl.onevcat.json", directoryHint: .notDirectory)
   }
@@ -118,7 +118,7 @@ nonisolated enum SupacodePaths {
   }
 
   /// Legacy location: ~/.prowl/repo/<name>/supacode.onevcat.json (pre-rename)
-  static func legacyOnevcatRepositorySettingsURL(for rootURL: URL) -> URL {
+  static func legacyUserRepositorySettingsURL(for rootURL: URL) -> URL {
     repositorySettingsDirectory(for: rootURL)
       .appending(path: "supacode.onevcat.json", directoryHint: .notDirectory)
   }
@@ -129,8 +129,23 @@ nonisolated enum SupacodePaths {
   }
 
   /// Legacy location: <repo-root>/supacode.onevcat.json (original upstream location)
-  static func originalLegacyOnevcatRepositorySettingsURL(for rootURL: URL) -> URL {
+  static func originalLegacyUserRepositorySettingsURL(for rootURL: URL) -> URL {
     rootURL.standardizedFileURL.appending(path: "supacode.onevcat.json", directoryHint: .notDirectory)
+  }
+
+  @available(*, deprecated, renamed: "userRepositorySettingsURL(for:)")
+  static func onevcatRepositorySettingsURL(for rootURL: URL) -> URL {
+    userRepositorySettingsURL(for: rootURL)
+  }
+
+  @available(*, deprecated, renamed: "legacyUserRepositorySettingsURL(for:)")
+  static func legacyOnevcatRepositorySettingsURL(for rootURL: URL) -> URL {
+    legacyUserRepositorySettingsURL(for: rootURL)
+  }
+
+  @available(*, deprecated, renamed: "originalLegacyUserRepositorySettingsURL(for:)")
+  static func originalLegacyOnevcatRepositorySettingsURL(for rootURL: URL) -> URL {
+    originalLegacyUserRepositorySettingsURL(for: rootURL)
   }
 
   private static func repositorySettingsDirectory(for rootURL: URL) -> URL {

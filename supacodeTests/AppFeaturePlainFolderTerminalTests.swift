@@ -27,7 +27,7 @@ struct AppFeaturePlainFolderTerminalTests {
       settingsFileURL
     )
 
-    let onevcatSettings = OnevcatRepositorySettings(
+    let onevcatSettings = UserRepositorySettings(
       customCommands: [
         OnevcatCustomCommand(
           title: "Watch",
@@ -40,7 +40,7 @@ struct AppFeaturePlainFolderTerminalTests {
     )
     try localStorage.save(
       JSONEncoder().encode(onevcatSettings),
-      at: SupacodePaths.onevcatRepositorySettingsURL(for: repository.rootURL)
+      at: SupacodePaths.userRepositorySettingsURL(for: repository.rootURL)
     )
 
     let store = TestStore(
@@ -134,7 +134,7 @@ struct AppFeaturePlainFolderTerminalTests {
       }
     }
 
-    let conflicted = OnevcatRepositorySettings(
+    let conflicted = UserRepositorySettings(
       customCommands: [
         OnevcatCustomCommand(
           title: "Build",

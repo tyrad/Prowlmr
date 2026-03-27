@@ -194,7 +194,7 @@ struct RepositorySettingsView: View {
               }
             )
           }
-          if store.onevcatSettings.customCommands.count < OnevcatRepositorySettings.maxCustomCommands {
+          if store.onevcatSettings.customCommands.count < UserRepositorySettings.maxCustomCommands {
             Button {
               addCustomCommand()
             } label: {
@@ -221,7 +221,7 @@ struct RepositorySettingsView: View {
   private func addCustomCommand() {
     let current = store.onevcatSettings.customCommands
     let next = current + [.default(index: current.count)]
-    store.onevcatSettings.customCommands = OnevcatRepositorySettings.normalizedCommands(next)
+    store.onevcatSettings.customCommands = UserRepositorySettings.normalizedCommands(next)
   }
 
   private func removeCustomCommand(id: OnevcatCustomCommand.ID) {

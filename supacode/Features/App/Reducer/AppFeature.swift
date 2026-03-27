@@ -45,7 +45,7 @@ struct AppFeature {
     case commandPalette(CommandPaletteFeature.Action)
     case openActionSelectionChanged(OpenWorktreeAction)
     case worktreeSettingsLoaded(RepositorySettings, worktreeID: Worktree.ID)
-    case worktreeOnevcatSettingsLoaded(OnevcatRepositorySettings, worktreeID: Worktree.ID)
+    case worktreeOnevcatSettingsLoaded(UserRepositorySettings, worktreeID: Worktree.ID)
     case openSelectedWorktree
     case openWorktree(OpenWorktreeAction)
     case openWorktreeFailed(OpenActionError)
@@ -170,9 +170,9 @@ struct AppFeature {
         state.runScriptDraft = ""
         state.isRunScriptPromptPresented = false
         @Shared(.repositorySettings(rootURL)) var repositorySettings
-        @Shared(.onevcatRepositorySettings(rootURL)) var onevcatRepositorySettings
+        @Shared(.userRepositorySettings(rootURL)) var userRepositorySettings
         let settings = repositorySettings
-        let onevcatSettings = onevcatRepositorySettings
+        let onevcatSettings = userRepositorySettings
         var effects: [Effect<Action>] = []
         if !isPlainFolderSelection {
           effects.append(
@@ -268,12 +268,12 @@ struct AppFeature {
             return .none
           }
           @Shared(.repositorySettings(repository.rootURL)) var repositorySettings
-          @Shared(.onevcatRepositorySettings(repository.rootURL)) var onevcatRepositorySettings
+          @Shared(.userRepositorySettings(repository.rootURL)) var userRepositorySettings
           state.settings.repositorySettings = RepositorySettingsFeature.State(
             rootURL: repository.rootURL,
             repositoryKind: repository.kind,
             settings: repositorySettings,
-            onevcatSettings: onevcatRepositorySettings
+            onevcatSettings: userRepositorySettings
           )
         case .general, .notifications, .worktree, .updates, .advanced, .github:
           state.settings.repositorySettings = nil
@@ -596,10 +596,10 @@ struct AppFeature {
         }
         let worktreeID = selectedWorktree.id
         @Shared(.repositorySettings(rootURL)) var repositorySettings
-        @Shared(.onevcatRepositorySettings(rootURL)) var onevcatRepositorySettings
+        @Shared(.userRepositorySettings(rootURL)) var userRepositorySettings
         return .concatenate(
           .send(.worktreeSettingsLoaded(repositorySettings, worktreeID: worktreeID)),
-          .send(.worktreeOnevcatSettingsLoaded(onevcatRepositorySettings, worktreeID: worktreeID))
+          .send(.worktreeOnevcatSettingsLoaded(userRepositorySettings, worktreeID: worktreeID))
         )
 
       case .worktreeSettingsLoaded(let settings, let worktreeID):
@@ -621,7 +621,7 @@ struct AppFeature {
         guard state.repositories.selectedTerminalWorktree?.id == worktreeID else {
           return .none
         }
-        state.selectedCustomCommands = OnevcatRepositorySettings.normalizedCommands(settings.customCommands)
+        state.selectedCustomCommands = UserRepositorySettings.normalizedCommands(settings.customCommands)
           .filter(\.hasRunnableCommand)
         let userOverrideConflicts = AppShortcuts.userOverrideConflicts(in: state.selectedCustomCommands)
         let shortcuts: [UserCustomShortcut] = state.selectedCustomCommands.compactMap { command in

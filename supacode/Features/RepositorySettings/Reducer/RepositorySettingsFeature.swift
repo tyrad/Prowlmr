@@ -8,7 +8,7 @@ struct RepositorySettingsFeature {
     var rootURL: URL
     var repositoryKind: Repository.Kind
     var settings: RepositorySettings
-    var onevcatSettings: OnevcatRepositorySettings
+    var onevcatSettings: UserRepositorySettings
     var globalDefaultWorktreeBaseDirectoryPath: String?
     var isBareRepository = false
     var branchOptions: [String] = []
@@ -61,7 +61,7 @@ struct RepositorySettingsFeature {
     case task
     case settingsLoaded(
       RepositorySettings,
-      OnevcatRepositorySettings,
+      UserRepositorySettings,
       isBareRepository: Bool,
       globalDefaultWorktreeBaseDirectoryPath: String?
     )
@@ -84,10 +84,10 @@ struct RepositorySettingsFeature {
       case .task:
         let rootURL = state.rootURL
         @Shared(.repositorySettings(rootURL)) var repositorySettings
-        @Shared(.onevcatRepositorySettings(rootURL)) var onevcatRepositorySettings
+        @Shared(.userRepositorySettings(rootURL)) var userRepositorySettings
         @Shared(.settingsFile) var settingsFile
         let settings = repositorySettings
-        let onevcatSettings = onevcatRepositorySettings
+        let onevcatSettings = userRepositorySettings
         let globalDefaultWorktreeBaseDirectoryPath =
           settingsFile.global.defaultWorktreeBaseDirectoryPath
         guard state.capabilities.supportsRepositoryGitSettings else {
@@ -174,10 +174,10 @@ struct RepositorySettingsFeature {
           repositoryRootURL: rootURL
         )
         @Shared(.repositorySettings(rootURL)) var repositorySettings
-        @Shared(.onevcatRepositorySettings(rootURL)) var onevcatRepositorySettings
-        let previousOnevcatSettings = onevcatRepositorySettings
+        @Shared(.userRepositorySettings(rootURL)) var userRepositorySettings
+        let previousOnevcatSettings = userRepositorySettings
         $repositorySettings.withLock { $0 = normalizedSettings }
-        $onevcatRepositorySettings.withLock { $0 = state.onevcatSettings }
+        $userRepositorySettings.withLock { $0 = state.onevcatSettings }
         if previousOnevcatSettings != state.onevcatSettings {
           let logger = SupaLogger("Settings")
           for conflict in AppShortcuts.userOverrideConflicts(in: state.onevcatSettings.customCommands) {

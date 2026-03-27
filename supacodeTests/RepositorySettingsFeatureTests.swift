@@ -24,7 +24,7 @@ struct RepositorySettingsFeatureTests {
       copyUntrackedOnWorktreeCreate: true,
       pullRequestMergeStrategy: .squash
     )
-    let storedOnevcatSettings = OnevcatRepositorySettings(
+    let storedOnevcatSettings = UserRepositorySettings(
       customCommands: [.default(index: 0)]
     )
     let repositoryID = rootURL.standardizedFileURL.path(percentEncoded: false)
@@ -41,7 +41,7 @@ struct RepositorySettingsFeatureTests {
     try #require(
       try? localStorage.save(
         onevcatSettingsData,
-        at: SupacodePaths.onevcatRepositorySettingsURL(for: rootURL)
+        at: SupacodePaths.userRepositorySettingsURL(for: rootURL)
       )
     )
 
@@ -124,7 +124,7 @@ struct RepositorySettingsFeatureTests {
       $0.repositoryLocalSettingsStorage = localStorage.storage
     }
 
-    let conflicted = OnevcatRepositorySettings(
+    let conflicted = UserRepositorySettings(
       customCommands: [
         OnevcatCustomCommand(
           title: "Run tests",
@@ -144,8 +144,8 @@ struct RepositorySettingsFeatureTests {
     }
     await store.receive(\.delegate.settingsChanged)
 
-    let savedData = try #require(localStorage.data(at: SupacodePaths.onevcatRepositorySettingsURL(for: rootURL)))
-    let decoded = try JSONDecoder().decode(OnevcatRepositorySettings.self, from: savedData)
+    let savedData = try #require(localStorage.data(at: SupacodePaths.userRepositorySettingsURL(for: rootURL)))
+    let decoded = try JSONDecoder().decode(UserRepositorySettings.self, from: savedData)
     #expect(decoded.customCommands.first?.shortcut == conflicted.customCommands.first?.shortcut)
   }
 }
