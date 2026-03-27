@@ -191,29 +191,13 @@ struct SupacodeApp: App {
         Button("Command Palette") {
           store.send(.commandPalette(.togglePresented))
         }
-        .keyboardShortcut("p", modifiers: .command)
-        .help("Command Palette (⌘P)")
+        .keyboardShortcut(
+          AppShortcuts.commandPalette.keyEquivalent,
+          modifiers: AppShortcuts.commandPalette.modifiers
+        )
+        .help("Command Palette (\(AppShortcuts.commandPalette.display))")
       }
       UpdateCommands(store: store.scope(state: \.updates, action: \.updates))
-      CommandGroup(replacing: .windowArrangement) {
-        Button("Prowl") {
-          if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-          }
-        }
-        .help("Show main window")
-        Divider()
-        Button("Minimize") {
-          NSApp.keyWindow?.miniaturize(nil)
-        }
-        .keyboardShortcut("m")
-        .help("Minimize (⌘M)")
-        Button("Zoom") {
-          NSApp.keyWindow?.zoom(nil)
-        }
-        .help("Zoom (no shortcut)")
-      }
       CommandGroup(replacing: .appSettings) {
         Button("Settings...") {
           SettingsWindowManager.shared.show()
@@ -227,8 +211,11 @@ struct SupacodeApp: App {
         Button("Quit Prowl") {
           store.send(.requestQuit)
         }
-        .keyboardShortcut("q")
-        .help("Quit Prowl (⌘Q)")
+        .keyboardShortcut(
+          AppShortcuts.quitApplication.keyEquivalent,
+          modifiers: AppShortcuts.quitApplication.modifiers
+        )
+        .help("Quit Prowl (\(AppShortcuts.quitApplication.display))")
       }
     }
   }
