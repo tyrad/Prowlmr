@@ -191,8 +191,11 @@ struct SupacodeApp: App {
         Button("Command Palette") {
           store.send(.commandPalette(.togglePresented))
         }
-        .keyboardShortcut("p", modifiers: .command)
-        .help("Command Palette (⌘P)")
+        .keyboardShortcut(
+          AppShortcuts.commandPalette.keyEquivalent,
+          modifiers: AppShortcuts.commandPalette.modifiers
+        )
+        .help("Command Palette (\(AppShortcuts.commandPalette.display))")
       }
       UpdateCommands(store: store.scope(state: \.updates, action: \.updates))
       CommandGroup(replacing: .windowArrangement) {
@@ -207,8 +210,11 @@ struct SupacodeApp: App {
         Button("Minimize") {
           NSApp.keyWindow?.miniaturize(nil)
         }
-        .keyboardShortcut("m")
-        .help("Minimize (⌘M)")
+        .keyboardShortcut(
+          AppShortcuts.minimizeWindow.keyEquivalent,
+          modifiers: AppShortcuts.minimizeWindow.modifiers
+        )
+        .help("Minimize (\(AppShortcuts.minimizeWindow.display))")
         Button("Zoom") {
           NSApp.keyWindow?.zoom(nil)
         }
@@ -227,8 +233,11 @@ struct SupacodeApp: App {
         Button("Quit Prowl") {
           store.send(.requestQuit)
         }
-        .keyboardShortcut("q")
-        .help("Quit Prowl (⌘Q)")
+        .keyboardShortcut(
+          AppShortcuts.quitApplication.keyEquivalent,
+          modifiers: AppShortcuts.quitApplication.modifiers
+        )
+        .help("Quit Prowl (\(AppShortcuts.quitApplication.display))")
       }
     }
   }

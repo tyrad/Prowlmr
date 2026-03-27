@@ -54,6 +54,38 @@ struct AppShortcutsTests {
     )
   }
 
+  @Test func systemFixedAndLocalInteractionShortcutsAreDefinedInRegistry() {
+    let idToDisplay = Dictionary(uniqueKeysWithValues: AppShortcuts.bindings.map { ($0.id, $0.shortcut.display) })
+    let idToScope = Dictionary(uniqueKeysWithValues: AppShortcuts.bindings.map { ($0.id, $0.scope) })
+
+    expectNoDifference(
+      idToDisplay["command_palette"],
+      AppShortcuts.commandPalette.display
+    )
+    expectNoDifference(
+      idToDisplay["minimize_window"],
+      AppShortcuts.minimizeWindow.display
+    )
+    expectNoDifference(
+      idToDisplay["quit_application"],
+      AppShortcuts.quitApplication.display
+    )
+    expectNoDifference(
+      idToDisplay["rename_branch"],
+      AppShortcuts.renameBranch.display
+    )
+    expectNoDifference(
+      idToDisplay["select_all_canvas_cards"],
+      AppShortcuts.selectAllCanvasCards.display
+    )
+
+    #expect(idToScope["command_palette"] == .systemFixedAppAction)
+    #expect(idToScope["minimize_window"] == .systemFixedAppAction)
+    #expect(idToScope["quit_application"] == .systemFixedAppAction)
+    #expect(idToScope["rename_branch"] == .localInteraction)
+    #expect(idToScope["select_all_canvas_cards"] == .localInteraction)
+  }
+
   @Test func tabSelectionGhosttyKeybindArgumentsMatchExpected() {
     expectNoDifference(
       AppShortcuts.tabSelectionGhosttyKeybindArguments,
