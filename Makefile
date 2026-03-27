@@ -89,7 +89,14 @@ install-dev-build: build-app # install dev build to /Applications
 		exit 1; \
 	fi; \
 	echo "copying $$src -> $$dst"; \
-	rm -rf "$$dst"; \
+	if [ -e "$$dst" ]; then \
+		if ! command -v trash >/dev/null 2>&1; then \
+			echo "error: trash command not found; refusing to remove $$dst"; \
+			exit 1; \
+		fi; \
+		echo "moving existing app to Trash: $$dst"; \
+		trash "$$dst"; \
+	fi; \
 	ditto "$$src" "$$dst"; \
 	echo "installed $$dst"
 
@@ -161,7 +168,14 @@ install-release: build-ghostty-xcframework # Build Release, sign locally, instal
 			;; \
 	esac; \
 	echo "copying $$APP_PATH -> $$DST"; \
-	rm -rf "$$DST"; \
+	if [ -e "$$DST" ]; then \
+		if ! command -v trash >/dev/null 2>&1; then \
+			echo "error: trash command not found; refusing to remove $$DST"; \
+			exit 1; \
+		fi; \
+		echo "moving existing app to Trash: $$DST"; \
+		trash "$$DST"; \
+	fi; \
 	ditto "$$APP_PATH" "$$DST"; \
 	echo "installed $$DST (Release build, locally signed)"
 
