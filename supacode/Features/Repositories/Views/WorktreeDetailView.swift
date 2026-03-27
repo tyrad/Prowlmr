@@ -244,6 +244,8 @@ struct WorktreeDetailView: View {
       .focusedSceneValue(\.navigateSearchNextAction, actions.navigateSearchNext)
       .focusedSceneValue(\.navigateSearchPreviousAction, actions.navigateSearchPrevious)
       .focusedSceneValue(\.endSearchAction, actions.endSearch)
+      .focusedSceneValue(\.selectPreviousTerminalTabAction, actions.selectPreviousTerminalTab)
+      .focusedSceneValue(\.selectNextTerminalTabAction, actions.selectNextTerminalTab)
       .focusedSceneValue(\.runScriptAction, actions.runScript)
       .focusedSceneValue(\.stopRunScriptAction, actions.stopRunScript)
   }
@@ -281,6 +283,17 @@ struct WorktreeDetailView: View {
       }
     }
 
+    func terminalBindingAction(_ bindingAction: String) -> (() -> Void)? {
+      if let action = canvasAction({ $0.performBindingActionOnFocusedSurface(bindingAction) }) {
+        return action
+      }
+      guard hasActiveWorktree, let selectedWorktree = repositories.selectedTerminalWorktree else { return nil }
+      return {
+        guard let state = terminalManager.stateIfExists(for: selectedWorktree.id) else { return }
+        _ = state.performBindingActionOnFocusedSurface(bindingAction)
+      }
+    }
+
     return FocusedActions(
       openSelectedWorktree: action(.openSelectedWorktree),
       newTerminal: action(.newTerminal),
@@ -294,6 +307,8 @@ struct WorktreeDetailView: View {
       navigateSearchNext: action(.navigateSearchNext),
       navigateSearchPrevious: action(.navigateSearchPrevious),
       endSearch: action(.endSearch),
+      selectPreviousTerminalTab: terminalBindingAction("previous_tab"),
+      selectNextTerminalTab: terminalBindingAction("next_tab"),
       runScript: runScriptEnabled ? { store.send(.runScript) } : nil,
       stopRunScript: runScriptIsRunning ? { store.send(.stopRunScript) } : nil
     )
@@ -330,6 +345,8 @@ struct WorktreeDetailView: View {
     let navigateSearchNext: (() -> Void)?
     let navigateSearchPrevious: (() -> Void)?
     let endSearch: (() -> Void)?
+    let selectPreviousTerminalTab: (() -> Void)?
+    let selectNextTerminalTab: (() -> Void)?
     let runScript: (() -> Void)?
     let stopRunScript: (() -> Void)?
   }
