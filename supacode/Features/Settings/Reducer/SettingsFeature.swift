@@ -104,6 +104,7 @@ struct SettingsFeature {
   @CasePathable
   enum Delegate: Equatable {
     case settingsChanged(GlobalSettings)
+    case terminalFontSizeChanged(Float32?)
   }
 
   @Dependency(AnalyticsClient.self) private var analyticsClient
@@ -183,7 +184,10 @@ struct SettingsFeature {
       case .setTerminalFontSize(let fontSize):
         guard state.terminalFontSize != fontSize else { return .none }
         state.terminalFontSize = fontSize
-        return persist(state, captureAnalytics: false)
+        return .merge(
+          persist(state, captureAnalytics: false, emitSettingsChanged: false),
+          .send(.delegate(.terminalFontSizeChanged(fontSize)))
+        )
 
       case .showNotificationPermissionAlert(let errorMessage):
         let message: String
@@ -237,13 +241,20 @@ struct SettingsFeature {
     }
   }
 
-  private func persist(_ state: State, captureAnalytics: Bool = true) -> Effect<Action> {
+  private func persist(
+    _ state: State,
+    captureAnalytics: Bool = true,
+    emitSettingsChanged: Bool = true
+  ) -> Effect<Action> {
     let settings = state.globalSettings
     @Shared(.settingsFile) var settingsFile
     $settingsFile.withLock { $0.global = settings }
     if captureAnalytics, settings.analyticsEnabled {
       analyticsClient.capture("settings_changed", nil)
     }
-    return .send(.delegate(.settingsChanged(settings)))
+    if emitSettingsChanged {
+      return .send(.delegate(.settingsChanged(settings)))
+    }
+    return .none
   }
 }

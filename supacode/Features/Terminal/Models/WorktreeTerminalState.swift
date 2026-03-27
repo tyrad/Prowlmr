@@ -761,9 +761,13 @@ final class WorktreeTerminalState {
   }
 
   private func handleCellSizeChange(forSurfaceID surfaceID: UUID) {
+    handleCellSizeChange(forSurfaceID: surfaceID, fontSize: fontSize(forSurfaceID: surfaceID))
+  }
+
+  func handleCellSizeChange(forSurfaceID surfaceID: UUID, fontSize: Float32?) {
     let inserted = hasInitializedCellSizeSurfaceIDs.insert(surfaceID).inserted
     guard !inserted else { return }
-    onFontSizeChanged?(fontSize(forSurfaceID: surfaceID))
+    onFontSizeChanged?(fontSize)
   }
 
   private func fontSize(forSurfaceID surfaceID: UUID) -> Float32? {
