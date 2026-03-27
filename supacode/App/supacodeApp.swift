@@ -202,8 +202,7 @@ struct SupacodeApp: App {
             NSApp.activate(ignoringOtherApps: true)
           }
         }
-        .keyboardShortcut("0")
-        .help("Show main window (⌘0)")
+        .help("Show main window")
         Divider()
         Button("Minimize") {
           NSApp.keyWindow?.miniaturize(nil)
