@@ -10,6 +10,14 @@ struct SidebarFooterView: View {
   var body: some View {
     HStack {
       Button {
+        store.send(.setOpenPanelPresented(true))
+      } label: {
+        Image(systemName: "folder.badge.plus")
+          .accessibilityLabel("Add Repository")
+      }
+      .help("Add Repository (\(AppShortcuts.openRepository.display))")
+
+      Button {
         remoteGroupsStore.send(.setAddPromptPresented(true))
       } label: {
         Image(systemName: "link.badge.plus")

@@ -42,6 +42,7 @@ struct RemoteGroupsSectionView: View {
   private func endpointRow(_ endpoint: RemoteEndpoint) -> some View {
     let host = endpoint.baseURL.host(percentEncoded: false) ?? endpoint.baseURL.absoluteString
     let errorMessage = store.errorByEndpointID[endpoint.id]
+    let endpointErrorMessage = errorMessage.map { "Failed to load sessions: \($0)" }
 
     HStack(spacing: 8) {
       Image(systemName: "network")
@@ -55,16 +56,23 @@ struct RemoteGroupsSectionView: View {
           .foregroundStyle(.secondary)
           .lineLimit(1)
           .truncationMode(.middle)
+        if let endpointErrorMessage {
+          Text(endpointErrorMessage)
+            .font(.caption.monospaced())
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+        }
       }
       Spacer()
       if store.loadingEndpointIDs.contains(endpoint.id) {
         ProgressView()
           .controlSize(.small)
-      } else if let errorMessage {
+      } else if let endpointErrorMessage {
         Image(systemName: "exclamationmark.triangle.fill")
           .foregroundStyle(.yellow)
           .accessibilityLabel("Endpoint error")
-          .help(errorMessage)
+          .help(endpointErrorMessage)
       }
     }
     .contentShape(Rectangle())
