@@ -1,6 +1,37 @@
 # Prowl
 
-Native terminal coding agents command center. Fork of [Supacode](https://github.com/supabitapp/supacode).
+A native command center for terminal-based coding agents.  
+This repository is a fork of [Supacode](https://github.com/supabitapp/supacode), with onevcat-specific customizations.
+
+## Features
+
+- Multi-repository and worktree oriented terminal workflow
+- Built-in Ghostty-based terminal experience
+- Canvas / parallel session workflow support
+- Remote WebView integration for external terminal dashboards
+
+## Remote H5 Embedding
+
+Prowl supports embedding remote H5 pages directly in the right-side detail pane (WebView), including web terminals.
+
+For example, you can embed:
+
+- [mini-terminal (web terminal)](https://github.com/tyrad/mini-terminal)
+
+Typical remote URL format:
+
+```text
+https://your-domain.example.com:9444/mini-terminal/
+```
+
+Current remote toolbar supports:
+
+- Keep Alive (persist WebView when switching items)
+- Force Refresh
+- Open in Browser
+- Centered status/time hint and notification bell
+
+Authentication can be handled by the H5 page itself (for example via your own login flow or gateway strategy).
 
 ## Technical Stack
 
@@ -30,13 +61,13 @@ make format    # Run swift-format
 
 ## Recent Fork Updates
 
-- Remote mini-terminal integration moved controls from in-page bar to the macOS window toolbar.
-- Restored centered toolbar status area (time hint) and notification bell for remote views.
-- Moved remote actions to the right side of toolbar: Keep Alive, Force Refresh, and Open in Browser.
-- Reduced Keep Alive switch visual size for a cleaner toolbar layout.
-- Improved remote WebView behavior: endpoint switching reliability, keep-alive reload policy, delegate rebinding for cached views, shared/persistent auth credentials, and persistent resource caching.
+- Remote mini-terminal integration moved controls from in-page bar to the macOS window toolbar
+- Restored centered toolbar status area (time hint) and notification bell for remote views
+- Moved remote actions to the right side of toolbar: Keep Alive, Force Refresh, Open in Browser
+- Reduced Keep Alive switch visual size for a cleaner toolbar layout
+- Improved remote WebView behavior: endpoint switching, keep-alive reload policy, delegate rebinding for cached views, shared/persistent auth credentials, and resource caching
 
 ## Contributing
 
-- I actual prefer a well written issue describing features/bugs u want rather than a vibe-coded PR
-- I review every line personally and will close if I feel like the quality is not up to standard
+- A clear issue describing your feature/bug is preferred over a vibe-coded PR
+- Every line will be reviewed and low-quality changes may be rejected
