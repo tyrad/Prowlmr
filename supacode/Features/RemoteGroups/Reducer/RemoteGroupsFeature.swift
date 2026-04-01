@@ -25,6 +25,7 @@ struct RemoteGroupsFeature {
     case addURLDraftChanged(String)
     case addGroupDraftChanged(String)
     case submitEndpoint(urlText: String, initialGroup: String)
+    case removeEndpoint(UUID)
     case clearSelection
     case fetchEndpointSessions(UUID)
     case endpointSessionsResponse(endpointID: UUID, result: Result<[RemoteTerminalSession], EndpointSessionsError>)
@@ -91,6 +92,21 @@ struct RemoteGroupsFeature {
         state.addGroupDraft = ""
         return .send(.fetchEndpointSessions(endpoint.id))
 
+      case .removeEndpoint(let endpointID):
+        state.$endpoints.withLock {
+          $0.removeAll(where: { $0.id == endpointID })
+        }
+        state.groupsByEndpointID.removeValue(forKey: endpointID)
+        state.loadingEndpointIDs.remove(endpointID)
+        state.errorByEndpointID.removeValue(forKey: endpointID)
+
+        if state.selection.matches(endpointID: endpointID) {
+          state.$selection.withLock {
+            $0 = .none
+          }
+        }
+        return .none
+
       case .clearSelection:
         state.$selection.withLock {
           $0 = .none
@@ -120,6 +136,13 @@ struct RemoteGroupsFeature {
         }
 
       case .endpointSessionsResponse(let endpointID, let result):
+        guard state.endpoints.contains(where: { $0.id == endpointID }) else {
+          state.loadingEndpointIDs.remove(endpointID)
+          state.groupsByEndpointID.removeValue(forKey: endpointID)
+          state.errorByEndpointID.removeValue(forKey: endpointID)
+          return .none
+        }
+
         state.loadingEndpointIDs.remove(endpointID)
 
         switch result {
@@ -146,6 +169,19 @@ struct RemoteGroupsFeature {
         }
         return .none
       }
+    }
+  }
+}
+
+private extension RemoteSelection {
+  func matches(endpointID: UUID) -> Bool {
+    switch self {
+    case .none:
+      return false
+    case .overview(let selectedEndpointID):
+      return selectedEndpointID == endpointID
+    case .group(let selectedEndpointID, _):
+      return selectedEndpointID == endpointID
     }
   }
 }

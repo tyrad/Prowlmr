@@ -38,4 +38,48 @@ struct RemoteGroupsFeatureTests {
     )
     #expect(store.state.errorByEndpointID[endpointID] == nil)
   }
+
+  @Test func remove_endpoint_cleans_state_and_selection() async {
+    let endpointID = UUID()
+    let otherEndpointID = UUID()
+
+    var state = RemoteGroupsFeature.State()
+    state.$endpoints.withLock {
+      $0 = [
+        RemoteEndpoint(id: endpointID, baseURL: URL(string: "https://example.com/mini-terminal/")!),
+        RemoteEndpoint(id: otherEndpointID, baseURL: URL(string: "https://other.example.com/mini-terminal/")!),
+      ]
+    }
+    state.groupsByEndpointID = [
+      endpointID: [RemoteGroupRef(group: "alpha", sessionCount: 2)],
+      otherEndpointID: [RemoteGroupRef(group: "beta", sessionCount: 1)],
+    ]
+    state.loadingEndpointIDs = [endpointID]
+    state.errorByEndpointID = [endpointID: "boom"]
+    state.$selection.withLock {
+      $0 = .group(endpointID: endpointID, group: "alpha")
+    }
+
+    let store = TestStore(initialState: state) {
+      RemoteGroupsFeature()
+    }
+
+    store.exhaustivity = .off
+    await store.send(.removeEndpoint(endpointID)) {
+      $0.$endpoints.withLock {
+        $0 = [
+          RemoteEndpoint(
+            id: otherEndpointID,
+            baseURL: URL(string: "https://other.example.com/mini-terminal/")!
+          ),
+        ]
+      }
+      $0.groupsByEndpointID = [otherEndpointID: [RemoteGroupRef(group: "beta", sessionCount: 1)]]
+      $0.loadingEndpointIDs = []
+      $0.errorByEndpointID = [:]
+      $0.$selection.withLock {
+        $0 = .none
+      }
+    }
+  }
 }

@@ -18,6 +18,10 @@ struct RemoteGroupsSectionView: View {
                 store.send(.fetchEndpointSessions(endpoint.id))
               }
               .help("Refresh groups")
+              Button("Remove Endpoint", role: .destructive) {
+                store.send(.removeEndpoint(endpoint.id))
+              }
+              .help("Remove endpoint")
             }
 
           if let groups = store.groupsByEndpointID[endpoint.id], !groups.isEmpty {
@@ -74,6 +78,14 @@ struct RemoteGroupsSectionView: View {
           .accessibilityLabel("Endpoint error")
           .help(endpointErrorMessage)
       }
+      Button(role: .destructive) {
+        store.send(.removeEndpoint(endpoint.id))
+      } label: {
+        Image(systemName: "trash")
+          .accessibilityLabel("Remove Endpoint")
+      }
+      .buttonStyle(.plain)
+      .help("Remove endpoint")
     }
     .contentShape(Rectangle())
     .help(endpoint.baseURL.absoluteString)
