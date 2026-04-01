@@ -22,6 +22,8 @@ struct WorktreeDetailView: View {
   @Bindable var store: StoreOf<AppFeature>
   let terminalManager: WorktreeTerminalManager
   @Environment(CommandKeyObserver.self) private var commandKeyObserver
+  @AppStorage("remoteGroups_keepWebViewAlive") private var keepRemoteWebViewAlive = false
+  @State private var remoteReloadToken: UInt = 0
 
   var body: some View {
     detailBody(state: store.state)
@@ -57,67 +59,70 @@ struct WorktreeDetailView: View {
     let unseenNotificationWorktreeCount = notificationGroups.reduce(0) { count, repository in
       count + repository.unseenWorktreeCount
     }
-    let content = detailContent(
-      repositories: repositories,
-      remoteDetailContext: remoteDetailContext,
-      loadingInfo: loadingInfo,
-      selectedTerminalWorktree: selectedTerminalWorktree,
-      selectedWorktreeSummaries: selectedWorktreeSummaries
-    )
-    .navigationTitle(repositories.isShowingCanvas ? "Canvas" : "")
-    .toolbar(removing: repositories.isShowingCanvas ? nil : .title)
-    .toolbar {
-      if repositories.isShowingCanvas {
-        ToolbarItem(placement: .primaryAction) {
-          ToolbarNotificationsPopoverButton(
-            groups: notificationGroups,
-            unseenWorktreeCount: unseenNotificationWorktreeCount,
-            onSelectNotification: selectToolbarNotification,
-            onDismissAll: { dismissAllToolbarNotifications(in: notificationGroups) }
-          )
-        }
-      } else if hasActiveTerminalTarget,
-        let toolbarState = toolbarState(
-          input: ToolbarStateInput(
-            repositories: repositories,
-            selectedWorktree: selectedWorktree,
-            notificationGroups: notificationGroups,
-            unseenNotificationWorktreeCount: unseenNotificationWorktreeCount,
-            openActionSelection: openActionSelection,
-            showExtras: commandKeyObserver.isPressed,
-            runScriptEnabled: runScriptEnabled,
-            runScriptIsRunning: runScriptIsRunning,
-            customCommands: customCommands
-          )
-        )
-      {
-        WorktreeToolbarContent(
-          toolbarState: toolbarState,
-          onRenameBranch: { newBranch in
-            guard let selectedWorktree else { return }
-            store.send(.repositories(.requestRenameBranch(selectedWorktree.id, newBranch)))
-          },
-          onOpenWorktree: { action in
-            store.send(.openWorktree(action))
-          },
-          onOpenActionSelectionChanged: { action in
-            store.send(.openActionSelectionChanged(action))
-          },
-          onCopyPath: {
-            guard let selectedTerminalWorktree else { return }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(selectedTerminalWorktree.workingDirectory.path, forType: .string)
-          },
-          onSelectNotification: selectToolbarNotification,
-          onDismissAllNotifications: { dismissAllToolbarNotifications(in: notificationGroups) },
-          onRunScript: { store.send(.runScript) },
-          onStopRunScript: { store.send(.stopRunScript) },
-          onRunCustomCommand: { index in
-            store.send(.runCustomCommand(index))
-          }
+    let content = AnyView(
+      detailContent(
+        repositories: repositories,
+        remoteDetailContext: remoteDetailContext,
+        loadingInfo: loadingInfo,
+        selectedTerminalWorktree: selectedTerminalWorktree,
+        selectedWorktreeSummaries: selectedWorktreeSummaries
+      )
+      .navigationTitle(repositories.isShowingCanvas ? "Canvas" : "")
+      .toolbar(removing: repositories.isShowingCanvas ? nil : .title)
+      .toolbar {
+        detailToolbarContent(
+          repositories: repositories,
+          remoteDetailContext: remoteDetailContext,
+          notificationGroups: notificationGroups,
+          unseenNotificationWorktreeCount: unseenNotificationWorktreeCount
         )
       }
-    }
+      .toolbar {
+        if !repositories.isShowingCanvas,
+          remoteDetailContext == nil,
+          hasActiveTerminalTarget,
+          let toolbarState = toolbarState(
+            input: ToolbarStateInput(
+              repositories: repositories,
+              selectedWorktree: selectedWorktree,
+              notificationGroups: notificationGroups,
+              unseenNotificationWorktreeCount: unseenNotificationWorktreeCount,
+              openActionSelection: openActionSelection,
+              showExtras: commandKeyObserver.isPressed,
+              runScriptEnabled: runScriptEnabled,
+              runScriptIsRunning: runScriptIsRunning,
+              customCommands: customCommands
+            )
+          )
+        {
+          WorktreeToolbarContent(
+            toolbarState: toolbarState,
+            onRenameBranch: { newBranch in
+              guard let selectedWorktree else { return }
+              store.send(.repositories(.requestRenameBranch(selectedWorktree.id, newBranch)))
+            },
+            onOpenWorktree: { action in
+              store.send(.openWorktree(action))
+            },
+            onOpenActionSelectionChanged: { action in
+              store.send(.openActionSelectionChanged(action))
+            },
+            onCopyPath: {
+              guard let selectedTerminalWorktree else { return }
+              NSPasteboard.general.clearContents()
+              NSPasteboard.general.setString(selectedTerminalWorktree.workingDirectory.path, forType: .string)
+            },
+            onSelectNotification: selectToolbarNotification,
+            onDismissAllNotifications: { dismissAllToolbarNotifications(in: notificationGroups) },
+            onRunScript: { store.send(.runScript) },
+            onStopRunScript: { store.send(.stopRunScript) },
+            onRunCustomCommand: { index in
+              store.send(.runCustomCommand(index))
+            }
+          )
+        }
+      }
+    )
     let actions = makeFocusedActions(
       repositories: repositories,
       hasActiveWorktree: hasActiveTerminalTarget,
@@ -155,6 +160,54 @@ struct WorktreeDetailView: View {
       runScriptIsRunning: input.runScriptIsRunning,
       customCommands: input.customCommands
     )
+  }
+
+  @ToolbarContentBuilder
+  private func detailToolbarContent(
+    repositories: RepositoriesFeature.State,
+    remoteDetailContext: RemoteDetailContext?,
+    notificationGroups: [ToolbarNotificationRepositoryGroup],
+    unseenNotificationWorktreeCount: Int
+  ) -> some ToolbarContent {
+    if repositories.isShowingCanvas {
+      ToolbarItem(placement: .primaryAction) {
+        ToolbarNotificationsPopoverButton(
+          groups: notificationGroups,
+          unseenWorktreeCount: unseenNotificationWorktreeCount,
+          onSelectNotification: selectToolbarNotification,
+          onDismissAll: { dismissAllToolbarNotifications(in: notificationGroups) }
+        )
+      }
+    } else if let remoteDetailContext {
+      ToolbarItemGroup(placement: .primaryAction) {
+        Toggle("Keep Alive", isOn: $keepRemoteWebViewAlive)
+          .toggleStyle(.switch)
+          .help("Keep webview alive when switching selection (no shortcut)")
+
+        Button {
+          remoteReloadToken &+= 1
+        } label: {
+          Image(systemName: "arrow.clockwise")
+        }
+        .keyboardShortcut("r", modifiers: .command)
+        .help("Force refresh (\u{2318}R)")
+
+        Button {
+          NSWorkspace.shared.open(remoteDetailContext.endpoint.baseURL)
+        } label: {
+          Image(systemName: "safari")
+        }
+        .keyboardShortcut("o", modifiers: [.command, .shift])
+        .help("Open in browser (\u{2318}\u{21E7}O)")
+
+        ToolbarNotificationsPopoverButton(
+          groups: notificationGroups,
+          unseenWorktreeCount: unseenNotificationWorktreeCount,
+          onSelectNotification: selectToolbarNotification,
+          onDismissAll: { dismissAllToolbarNotifications(in: notificationGroups) }
+        )
+      }
+    }
   }
 
   private func selectedWorktreeSummaries(
@@ -199,7 +252,9 @@ struct WorktreeDetailView: View {
   ) -> some View {
     if let remoteDetailContext {
       RemoteGroupDetailView(
-        endpoint: remoteDetailContext.endpoint
+        endpoint: remoteDetailContext.endpoint,
+        reloadToken: remoteReloadToken,
+        keepWebViewAlive: keepRemoteWebViewAlive
       )
     } else if repositories.isShowingCanvas {
       CanvasView(

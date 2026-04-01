@@ -4,52 +4,17 @@ import WebKit
 
 struct RemoteGroupDetailView: View {
   let endpoint: RemoteEndpoint
-  @AppStorage("remoteGroups_keepWebViewAlive") private var keepWebViewAlive = false
-  @State private var reloadToken: UInt = 0
+  let reloadToken: UInt
+  let keepWebViewAlive: Bool
 
   var body: some View {
-    VStack(spacing: 0) {
-      HStack(spacing: 12) {
-        Spacer()
-
-        Toggle("Keep Alive", isOn: $keepWebViewAlive)
-          .toggleStyle(.switch)
-          .help("Keep webview alive when switching selection (no shortcut)")
-          .onChange(of: keepWebViewAlive) { _, enabled in
-            RemoteWebViewCache.setKeepAliveEnabled(enabled)
-          }
-
-        Button {
-          reloadToken &+= 1
-        } label: {
-          Image(systemName: "arrow.clockwise")
-        }
-        .keyboardShortcut("r", modifiers: .command)
-        .help("Force refresh (\u{2318}R)")
-
-        Button {
-          NSWorkspace.shared.open(endpoint.baseURL)
-        } label: {
-          Image(systemName: "safari")
-        }
-        .keyboardShortcut("o", modifiers: [.command, .shift])
-        .help("Open in browser (\u{2318}\u{21E7}O)")
-      }
-      .padding(.horizontal, 12)
-      .padding(.vertical, 8)
-      .background(.bar)
-
-      Divider()
-
-      RemoteGroupWebView(
-        endpointID: endpoint.id,
-        url: endpoint.baseURL,
-        reloadToken: reloadToken,
-        keepAlive: keepWebViewAlive
-      )
-      .id(endpoint.id)
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
+    RemoteGroupWebView(
+      endpointID: endpoint.id,
+      url: endpoint.baseURL,
+      reloadToken: reloadToken,
+      keepAlive: keepWebViewAlive
+    )
+    .id(endpoint.id)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color(nsColor: .windowBackgroundColor))
     .onAppear {
