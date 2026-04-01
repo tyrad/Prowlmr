@@ -6,13 +6,12 @@ enum SidebarSelection: Hashable {
   case repository(Repository.ID)
   case canvas
   case remoteEndpoint(UUID)
-  case remoteGroup(endpointID: UUID, group: String)
 
   var worktreeID: Worktree.ID? {
     switch self {
     case .worktree(let id):
       return id
-    case .archivedWorktrees, .repository, .canvas, .remoteEndpoint, .remoteGroup:
+    case .archivedWorktrees, .repository, .canvas, .remoteEndpoint:
       return nil
     }
   }

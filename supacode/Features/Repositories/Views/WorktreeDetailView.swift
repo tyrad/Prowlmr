@@ -5,7 +5,6 @@ import SwiftUI
 struct WorktreeDetailView: View {
   private struct RemoteDetailContext {
     let endpoint: RemoteEndpoint
-    let group: String?
   }
 
   private struct ToolbarStateInput {
@@ -200,8 +199,7 @@ struct WorktreeDetailView: View {
   ) -> some View {
     if let remoteDetailContext {
       RemoteGroupDetailView(
-        endpoint: remoteDetailContext.endpoint,
-        group: remoteDetailContext.group
+        endpoint: remoteDetailContext.endpoint
       )
     } else if repositories.isShowingCanvas {
       CanvasView(
@@ -254,12 +252,12 @@ struct WorktreeDetailView: View {
       guard let endpoint = remoteState.endpoints.first(where: { $0.id == endpointID }) else {
         return nil
       }
-      return RemoteDetailContext(endpoint: endpoint, group: nil)
-    case .group(let endpointID, let group):
+      return RemoteDetailContext(endpoint: endpoint)
+    case .group(let endpointID, _):
       guard let endpoint = remoteState.endpoints.first(where: { $0.id == endpointID }) else {
         return nil
       }
-      return RemoteDetailContext(endpoint: endpoint, group: group)
+      return RemoteDetailContext(endpoint: endpoint)
     }
   }
 

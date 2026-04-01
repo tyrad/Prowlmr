@@ -3828,7 +3828,7 @@ private func isSidebarSelectionValid(
     return isSelectionValid(id, state: state)
   case .repository(let id):
     return state.repositories[id: id] != nil
-  case .archivedWorktrees, .canvas, .remoteEndpoint, .remoteGroup:
+  case .archivedWorktrees, .canvas, .remoteEndpoint:
     return true
   case nil:
     return false

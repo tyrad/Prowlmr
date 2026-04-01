@@ -10,7 +10,7 @@ struct RemoteGroupAddPromptView: View {
       VStack(alignment: .leading, spacing: 4) {
         Text("Add Remote Endpoint")
           .font(.title3)
-        Text("Connect a mini-terminal URL and auto-discover groups.")
+        Text("Mount a mini-terminal URL directly.")
           .foregroundStyle(.secondary)
       }
 
@@ -26,22 +26,6 @@ struct RemoteGroupAddPromptView: View {
         )
         .textFieldStyle(.roundedBorder)
         .focused($isURLFieldFocused)
-        .onSubmit {
-          submit()
-        }
-      }
-
-      VStack(alignment: .leading, spacing: 8) {
-        Text("Initial Group (optional)")
-          .foregroundStyle(.secondary)
-        TextField(
-          "leave empty to open overview",
-          text: Binding(
-            get: { store.addGroupDraft },
-            set: { store.send(.addGroupDraftChanged($0)) }
-          )
-        )
-        .textFieldStyle(.roundedBorder)
         .onSubmit {
           submit()
         }
@@ -87,8 +71,7 @@ struct RemoteGroupAddPromptView: View {
     }
     store.send(
       .submitEndpoint(
-        urlText: store.addURLDraft,
-        initialGroup: store.addGroupDraft
+        urlText: store.addURLDraft
       )
     )
   }

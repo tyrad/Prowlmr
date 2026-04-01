@@ -183,9 +183,9 @@ struct SidebarView: View {
         return [.remoteEndpoint(endpointID)]
       }
       return []
-    case .group(let endpointID, let group):
+    case .group(let endpointID, _):
       if remoteState.endpoints.contains(where: { $0.id == endpointID }) {
-        return [.remoteGroup(endpointID: endpointID, group: group)]
+        return [.remoteEndpoint(endpointID)]
       }
       return []
     }

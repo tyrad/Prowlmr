@@ -4,36 +4,22 @@ import Sharing
 
 @Reducer
 struct RemoteGroupsFeature {
-  nonisolated struct EndpointSessionsError: Error, Equatable, Sendable {
-    var message: String
-  }
-
   @ObservableState
   struct State: Equatable {
     @Shared(.appStorage("remoteGroups_endpoints")) var endpoints: [RemoteEndpoint] = []
     @Shared(.appStorage("remoteGroups_selection")) var selection: RemoteSelection = .none
-    var groupsByEndpointID: [UUID: [RemoteGroupRef]] = [:]
     var isAddPromptPresented = false
     var addURLDraft = ""
-    var addGroupDraft = ""
-    var loadingEndpointIDs: Set<UUID> = []
-    var errorByEndpointID: [UUID: String] = [:]
   }
 
   enum Action: Equatable {
     case setAddPromptPresented(Bool)
     case addURLDraftChanged(String)
-    case addGroupDraftChanged(String)
-    case submitEndpoint(urlText: String, initialGroup: String)
+    case submitEndpoint(urlText: String)
     case removeEndpoint(UUID)
     case clearSelection
-    case fetchEndpointSessions(UUID)
-    case endpointSessionsResponse(endpointID: UUID, result: Result<[RemoteTerminalSession], EndpointSessionsError>)
-    case selectOverview(UUID)
-    case selectGroup(endpointID: UUID, group: String)
+    case selectEndpoint(UUID)
   }
-
-  @Dependency(RemoteTerminalClient.self) var remoteTerminalClient
 
   var body: some Reducer<State, Action> {
     Reduce { state, action in
@@ -42,7 +28,6 @@ struct RemoteGroupsFeature {
         state.isAddPromptPresented = presented
         if !presented {
           state.addURLDraft = ""
-          state.addGroupDraft = ""
         }
         return .none
 
@@ -50,11 +35,7 @@ struct RemoteGroupsFeature {
         state.addURLDraft = value
         return .none
 
-      case .addGroupDraftChanged(let value):
-        state.addGroupDraft = value
-        return .none
-
-      case .submitEndpoint(let urlText, let initialGroup):
+      case .submitEndpoint(let urlText):
         let trimmed = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let rawURL = URL(string: trimmed),
           rawURL.scheme != nil,
@@ -75,30 +56,18 @@ struct RemoteGroupsFeature {
           endpoint = created
         }
 
-        let trimmedGroup = initialGroup.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedGroup.isEmpty {
-          state.$selection.withLock {
-            $0 = .overview(endpointID: endpoint.id)
-          }
-        } else {
-          let group = RemoteGroupParsing.slugify(trimmedGroup)
-          state.$selection.withLock {
-            $0 = group.isEmpty ? .overview(endpointID: endpoint.id) : .group(endpointID: endpoint.id, group: group)
-          }
+        state.$selection.withLock {
+          $0 = .overview(endpointID: endpoint.id)
         }
 
         state.isAddPromptPresented = false
         state.addURLDraft = ""
-        state.addGroupDraft = ""
-        return .send(.fetchEndpointSessions(endpoint.id))
+        return .none
 
       case .removeEndpoint(let endpointID):
         state.$endpoints.withLock {
           $0.removeAll(where: { $0.id == endpointID })
         }
-        state.groupsByEndpointID.removeValue(forKey: endpointID)
-        state.loadingEndpointIDs.remove(endpointID)
-        state.errorByEndpointID.removeValue(forKey: endpointID)
 
         if state.selection.matches(endpointID: endpointID) {
           state.$selection.withLock {
@@ -113,59 +82,9 @@ struct RemoteGroupsFeature {
         }
         return .none
 
-      case .fetchEndpointSessions(let endpointID):
-        guard let endpoint = state.endpoints.first(where: { $0.id == endpointID }) else {
-          return .none
-        }
-
-        state.loadingEndpointIDs.insert(endpointID)
-        state.errorByEndpointID[endpointID] = nil
-
-        return .run { send in
-          do {
-            let sessions = try await remoteTerminalClient.listSessions(endpoint.baseURL)
-            await send(.endpointSessionsResponse(endpointID: endpointID, result: .success(sessions)))
-          } catch {
-            await send(
-              .endpointSessionsResponse(
-                endpointID: endpointID,
-                result: .failure(.init(message: error.localizedDescription))
-              )
-            )
-          }
-        }
-
-      case .endpointSessionsResponse(let endpointID, let result):
-        guard state.endpoints.contains(where: { $0.id == endpointID }) else {
-          state.loadingEndpointIDs.remove(endpointID)
-          state.groupsByEndpointID.removeValue(forKey: endpointID)
-          state.errorByEndpointID.removeValue(forKey: endpointID)
-          return .none
-        }
-
-        state.loadingEndpointIDs.remove(endpointID)
-
-        switch result {
-        case .success(let sessions):
-          state.groupsByEndpointID[endpointID] = RemoteGroupRef.aggregate(sessions: sessions)
-          state.errorByEndpointID[endpointID] = nil
-
-        case .failure(let error):
-          state.groupsByEndpointID[endpointID] = []
-          state.errorByEndpointID[endpointID] = error.message
-        }
-
-        return .none
-
-      case .selectOverview(let endpointID):
+      case .selectEndpoint(let endpointID):
         state.$selection.withLock {
           $0 = .overview(endpointID: endpointID)
-        }
-        return .none
-
-      case .selectGroup(let endpointID, let group):
-        state.$selection.withLock {
-          $0 = .group(endpointID: endpointID, group: group)
         }
         return .none
       }

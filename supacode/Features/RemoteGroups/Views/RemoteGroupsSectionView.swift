@@ -15,39 +15,21 @@ struct RemoteGroupsSectionView: View {
           endpointRow(endpoint)
             .tag(SidebarSelection.remoteEndpoint(endpoint.id))
             .contextMenu {
-              Button("Refresh Groups") {
-                store.send(.fetchEndpointSessions(endpoint.id))
-              }
-              .help("Refresh groups")
               Button("Remove Endpoint", role: .destructive) {
                 store.send(.removeEndpoint(endpoint.id))
               }
               .help("Remove endpoint")
             }
-
-          if let groups = store.groupsByEndpointID[endpoint.id], !groups.isEmpty {
-            ForEach(groups) { groupRef in
-              groupRow(groupRef: groupRef)
-                .tag(
-                  SidebarSelection.remoteGroup(
-                    endpointID: endpoint.id,
-                    group: groupRef.group
-                  )
-                )
-            }
-          }
         }
       }
     } header: {
-      Text("Remote Groups")
+      Text("Remote Endpoints")
     }
   }
 
   @ViewBuilder
   private func endpointRow(_ endpoint: RemoteEndpoint) -> some View {
     let host = endpoint.baseURL.host(percentEncoded: false) ?? endpoint.baseURL.absoluteString
-    let errorMessage = store.errorByEndpointID[endpoint.id]
-    let endpointErrorMessage = errorMessage.map { "Failed to load sessions: \($0)" }
 
     HStack(spacing: 8) {
       Image(systemName: "network")
@@ -61,24 +43,8 @@ struct RemoteGroupsSectionView: View {
           .foregroundStyle(.secondary)
           .lineLimit(1)
           .truncationMode(.middle)
-        if let endpointErrorMessage {
-          Text(endpointErrorMessage)
-            .font(.caption.monospaced())
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .truncationMode(.middle)
-        }
       }
       Spacer()
-      if store.loadingEndpointIDs.contains(endpoint.id) {
-        ProgressView()
-          .controlSize(.small)
-      } else if let endpointErrorMessage {
-        Image(systemName: "exclamationmark.triangle.fill")
-          .foregroundStyle(.yellow)
-          .accessibilityLabel("Endpoint error")
-          .help(endpointErrorMessage)
-      }
       if hoveredEndpointID == endpoint.id {
         Button(role: .destructive) {
           store.send(.removeEndpoint(endpoint.id))
@@ -99,22 +65,5 @@ struct RemoteGroupsSectionView: View {
         hoveredEndpointID = nil
       }
     }
-  }
-
-  private func groupRow(groupRef: RemoteGroupRef) -> some View {
-    HStack(spacing: 8) {
-      Image(systemName: "rectangle.3.group")
-        .foregroundStyle(.secondary)
-        .accessibilityHidden(true)
-      Text(groupRef.group)
-        .lineLimit(1)
-      Spacer()
-      Text("\(groupRef.sessionCount)")
-        .foregroundStyle(.secondary)
-        .monospacedDigit()
-    }
-    .padding(.leading, 18)
-    .contentShape(Rectangle())
-    .help("Open \(groupRef.group)")
   }
 }

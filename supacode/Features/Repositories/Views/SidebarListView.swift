@@ -39,10 +39,6 @@ struct SidebarListView: View {
       },
       set: { newValue in
         let nextSelections = newValue
-        let remoteGroups: [(UUID, String)] = nextSelections.compactMap { selection in
-          guard case .remoteGroup(let endpointID, let group) = selection else { return nil }
-          return (endpointID, group)
-        }
         let remoteEndpoints: [UUID] = nextSelections.compactMap { selection in
           guard case .remoteEndpoint(let endpointID) = selection else { return nil }
           return endpointID
@@ -52,15 +48,9 @@ struct SidebarListView: View {
           return repositoryID
         }
 
-        if let (endpointID, group) = remoteGroups.first {
-          sidebarSelections = [.remoteGroup(endpointID: endpointID, group: group)]
-          remoteGroupsStore.send(.selectGroup(endpointID: endpointID, group: group))
-          return
-        }
-
         if let endpointID = remoteEndpoints.first {
           sidebarSelections = [.remoteEndpoint(endpointID)]
-          remoteGroupsStore.send(.selectOverview(endpointID))
+          remoteGroupsStore.send(.selectEndpoint(endpointID))
           return
         }
 
@@ -262,8 +252,8 @@ struct SidebarListView: View {
       return nil
     case .overview(let endpointID):
       return .remoteEndpoint(endpointID)
-    case .group(let endpointID, let group):
-      return .remoteGroup(endpointID: endpointID, group: group)
+    case .group(let endpointID, _):
+      return .remoteEndpoint(endpointID)
     }
   }
 }
