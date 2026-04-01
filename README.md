@@ -28,8 +28,15 @@ make test      # Run tests
 make format    # Run swift-format
 ```
 
+## Recent Fork Updates
+
+- Remote mini-terminal integration moved controls from in-page bar to the macOS window toolbar.
+- Restored centered toolbar status area (time hint) and notification bell for remote views.
+- Moved remote actions to the right side of toolbar: Keep Alive, Force Refresh, and Open in Browser.
+- Reduced Keep Alive switch visual size for a cleaner toolbar layout.
+- Improved remote WebView behavior: endpoint switching reliability, keep-alive reload policy, delegate rebinding for cached views, shared/persistent auth credentials, and persistent resource caching.
+
 ## Contributing
 
 - I actual prefer a well written issue describing features/bugs u want rather than a vibe-coded PR
 - I review every line personally and will close if I feel like the quality is not up to standard
-
