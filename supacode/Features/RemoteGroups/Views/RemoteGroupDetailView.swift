@@ -71,7 +71,7 @@ private struct RemoteGroupWebView: NSViewRepresentable {
   func makeNSView(context: Context) -> WKWebView {
     RemoteWebViewCache.setKeepAliveEnabled(keepAlive)
     let webView = RemoteWebViewCache.webView(for: endpointID, keepAlive: keepAlive) {
-      let view = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+      let view = WKWebView(frame: .zero, configuration: RemoteWebViewEnvironment.makeConfiguration())
       view.allowsBackForwardNavigationGestures = true
       return view
     }
@@ -96,7 +96,6 @@ private struct RemoteGroupWebView: NSViewRepresentable {
 
   final class Coordinator: NSObject, WKUIDelegate, WKNavigationDelegate {
     var lastReloadToken: UInt = 0
-    private var credentialsByProtectionSpace: [ProtectionSpaceKey: URLCredential] = [:]
 
     @MainActor
     func webView(
@@ -110,15 +109,16 @@ private struct RemoteGroupWebView: NSViewRepresentable {
         return
       }
 
-      let key = ProtectionSpaceKey(
-        host: protectionSpace.host,
-        port: protectionSpace.port,
-        realm: protectionSpace.realm ?? "",
-        authenticationMethod: protectionSpace.authenticationMethod
-      )
+      if challenge.previousFailureCount > 0 {
+        // Wrong credential was rejected; clear cached/persisted value and prompt again.
+        RemoteWebViewCredentialStore.invalidate(for: protectionSpace)
+      }
 
       if challenge.previousFailureCount == 0,
-        let cachedCredential = credentialsByProtectionSpace[key]
+        let cachedCredential = RemoteWebViewCredentialStore.credential(
+          for: protectionSpace,
+          proposedCredential: challenge.proposedCredential
+        )
       {
         completionHandler(.useCredential, cachedCredential)
         return
@@ -134,7 +134,7 @@ private struct RemoteGroupWebView: NSViewRepresentable {
         return
       }
 
-      credentialsByProtectionSpace[key] = credential
+      RemoteWebViewCredentialStore.save(credential, for: protectionSpace)
       completionHandler(.useCredential, credential)
     }
 
@@ -272,7 +272,7 @@ private struct RemoteGroupWebView: NSViewRepresentable {
         return nil
       }
 
-      return URLCredential(user: username, password: password, persistence: .forSession)
+      return URLCredential(user: username, password: password, persistence: .permanent)
     }
 
     private func credentialPromptDescription(for protectionSpace: URLProtectionSpace) -> String {
@@ -298,6 +298,93 @@ private struct ProtectionSpaceKey: Hashable {
   let port: Int
   let realm: String
   let authenticationMethod: String
+}
+
+@MainActor
+private enum RemoteWebViewCredentialStore {
+  private static var credentialsByProtectionSpace: [ProtectionSpaceKey: URLCredential] = [:]
+
+  static func credential(
+    for protectionSpace: URLProtectionSpace,
+    proposedCredential: URLCredential?
+  ) -> URLCredential? {
+    let key = ProtectionSpaceKey(from: protectionSpace)
+    if let cached = credentialsByProtectionSpace[key] {
+      return cached
+    }
+    if let proposedCredential {
+      credentialsByProtectionSpace[key] = proposedCredential
+      return proposedCredential
+    }
+    if let persisted = URLCredentialStorage.shared.defaultCredential(for: protectionSpace) {
+      credentialsByProtectionSpace[key] = persisted
+      return persisted
+    }
+    if let persistedMap = URLCredentialStorage.shared.credentials(for: protectionSpace),
+      let persisted = persistedMap.values.first
+    {
+      credentialsByProtectionSpace[key] = persisted
+      return persisted
+    }
+    return nil
+  }
+
+  static func save(_ credential: URLCredential, for protectionSpace: URLProtectionSpace) {
+    let key = ProtectionSpaceKey(from: protectionSpace)
+    credentialsByProtectionSpace[key] = credential
+    URLCredentialStorage.shared.setDefaultCredential(credential, for: protectionSpace)
+    URLCredentialStorage.shared.set(credential, for: protectionSpace)
+  }
+
+  static func invalidate(for protectionSpace: URLProtectionSpace) {
+    let key = ProtectionSpaceKey(from: protectionSpace)
+    if let existing = credentialsByProtectionSpace.removeValue(forKey: key) {
+      URLCredentialStorage.shared.remove(existing, for: protectionSpace)
+    }
+    if let defaultCredential = URLCredentialStorage.shared.defaultCredential(for: protectionSpace) {
+      URLCredentialStorage.shared.remove(defaultCredential, for: protectionSpace)
+    }
+  }
+}
+
+private extension ProtectionSpaceKey {
+  init(from protectionSpace: URLProtectionSpace) {
+    self.init(
+      host: protectionSpace.host,
+      port: protectionSpace.port,
+      realm: protectionSpace.realm ?? "",
+      authenticationMethod: protectionSpace.authenticationMethod
+    )
+  }
+}
+
+@MainActor
+private enum RemoteWebViewEnvironment {
+  private static let sharedWebsiteDataStore = WKWebsiteDataStore.default()
+  private static var hasConfiguredURLCache = false
+
+  static func makeConfiguration() -> WKWebViewConfiguration {
+    configureResourceCacheIfNeeded()
+
+    let configuration = WKWebViewConfiguration()
+    configuration.websiteDataStore = sharedWebsiteDataStore
+    return configuration
+  }
+
+  private static func configureResourceCacheIfNeeded() {
+    guard !hasConfiguredURLCache else {
+      return
+    }
+    hasConfiguredURLCache = true
+
+    let memoryCapacity = 64 * 1024 * 1024
+    let diskCapacity = 512 * 1024 * 1024
+    URLCache.shared = URLCache(
+      memoryCapacity: memoryCapacity,
+      diskCapacity: diskCapacity,
+      diskPath: "com.onevcat.prowl.remote-webview"
+    )
+  }
 }
 
 nonisolated enum RemoteWebViewLoadPolicy {
