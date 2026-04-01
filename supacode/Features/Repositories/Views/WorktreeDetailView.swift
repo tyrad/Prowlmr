@@ -180,6 +180,27 @@ struct WorktreeDetailView: View {
       }
     } else if let remoteDetailContext {
       ToolbarItemGroup(placement: .primaryAction) {
+        ToolbarStatusView(
+          toast: nil,
+          pullRequest: nil
+        )
+        .padding(.horizontal)
+      }
+
+      ToolbarSpacer(.fixed)
+
+      ToolbarItemGroup(placement: .primaryAction) {
+        ToolbarNotificationsPopoverButton(
+          groups: notificationGroups,
+          unseenWorktreeCount: unseenNotificationWorktreeCount,
+          onSelectNotification: selectToolbarNotification,
+          onDismissAll: { dismissAllToolbarNotifications(in: notificationGroups) }
+        )
+      }
+
+      ToolbarSpacer(.flexible)
+
+      ToolbarItemGroup(placement: .primaryAction) {
         Toggle("Keep Alive", isOn: $keepRemoteWebViewAlive)
           .toggleStyle(.switch)
           .help("Keep webview alive when switching selection (no shortcut)")
@@ -199,13 +220,6 @@ struct WorktreeDetailView: View {
         }
         .keyboardShortcut("o", modifiers: [.command, .shift])
         .help("Open in browser (\u{2318}\u{21E7}O)")
-
-        ToolbarNotificationsPopoverButton(
-          groups: notificationGroups,
-          unseenWorktreeCount: unseenNotificationWorktreeCount,
-          onSelectNotification: selectToolbarNotification,
-          onDismissAll: { dismissAllToolbarNotifications(in: notificationGroups) }
-        )
       }
     }
   }
