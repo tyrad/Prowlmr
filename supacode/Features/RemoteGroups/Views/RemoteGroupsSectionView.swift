@@ -3,6 +3,7 @@ import SwiftUI
 
 struct RemoteGroupsSectionView: View {
   @Bindable var store: StoreOf<RemoteGroupsFeature>
+  @State private var hoveredEndpointID: UUID?
 
   var body: some View {
     Section {
@@ -78,17 +79,26 @@ struct RemoteGroupsSectionView: View {
           .accessibilityLabel("Endpoint error")
           .help(endpointErrorMessage)
       }
-      Button(role: .destructive) {
-        store.send(.removeEndpoint(endpoint.id))
-      } label: {
-        Image(systemName: "trash")
-          .accessibilityLabel("Remove Endpoint")
+      if hoveredEndpointID == endpoint.id {
+        Button(role: .destructive) {
+          store.send(.removeEndpoint(endpoint.id))
+        } label: {
+          Image(systemName: "trash")
+            .accessibilityLabel("Remove Endpoint")
+        }
+        .buttonStyle(.plain)
+        .help("Remove endpoint")
       }
-      .buttonStyle(.plain)
-      .help("Remove endpoint")
     }
     .contentShape(Rectangle())
     .help(endpoint.baseURL.absoluteString)
+    .onHover { isHovering in
+      if isHovering {
+        hoveredEndpointID = endpoint.id
+      } else if hoveredEndpointID == endpoint.id {
+        hoveredEndpointID = nil
+      }
+    }
   }
 
   private func groupRow(groupRef: RemoteGroupRef) -> some View {
