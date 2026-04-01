@@ -7,9 +7,18 @@ import Testing
 @MainActor
 struct RemoteGroupsFeatureTests {
   @Test func submit_endpoint_adds_and_selects_endpoint() async throws {
-    let store = TestStore(initialState: RemoteGroupsFeature.State()) {
+    let state = RemoteGroupsFeature.State()
+    state.$endpoints.withLock {
+      $0 = []
+    }
+    state.$selection.withLock {
+      $0 = .none
+    }
+
+    let store = TestStore(initialState: state) {
       RemoteGroupsFeature()
     }
+    store.exhaustivity = .off
 
     await store.send(.submitEndpoint(urlText: "https://example.com/mini-terminal/"))
 

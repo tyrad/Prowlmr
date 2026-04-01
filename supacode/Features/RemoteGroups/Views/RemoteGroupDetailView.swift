@@ -47,6 +47,7 @@ struct RemoteGroupDetailView: View {
         reloadToken: reloadToken,
         keepAlive: keepWebViewAlive
       )
+      .id(endpoint.id)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
