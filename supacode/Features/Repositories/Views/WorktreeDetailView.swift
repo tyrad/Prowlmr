@@ -179,30 +179,27 @@ struct WorktreeDetailView: View {
         )
       }
     } else if let remoteDetailContext {
-      ToolbarItemGroup(placement: .primaryAction) {
-        ToolbarStatusView(
-          toast: nil,
-          pullRequest: nil
-        )
-        .padding(.horizontal)
+      ToolbarItem(placement: .principal) {
+        HStack(spacing: 10) {
+          ToolbarStatusView(
+            toast: nil,
+            pullRequest: nil
+          )
+
+          ToolbarNotificationsPopoverButton(
+            groups: notificationGroups,
+            unseenWorktreeCount: unseenNotificationWorktreeCount,
+            onSelectNotification: selectToolbarNotification,
+            onDismissAll: { dismissAllToolbarNotifications(in: notificationGroups) }
+          )
+        }
       }
-
-      ToolbarSpacer(.fixed)
-
-      ToolbarItemGroup(placement: .primaryAction) {
-        ToolbarNotificationsPopoverButton(
-          groups: notificationGroups,
-          unseenWorktreeCount: unseenNotificationWorktreeCount,
-          onSelectNotification: selectToolbarNotification,
-          onDismissAll: { dismissAllToolbarNotifications(in: notificationGroups) }
-        )
-      }
-
-      ToolbarSpacer(.flexible)
 
       ToolbarItemGroup(placement: .primaryAction) {
         Toggle("Keep Alive", isOn: $keepRemoteWebViewAlive)
           .toggleStyle(.switch)
+          .controlSize(.small)
+          .labelsHidden()
           .help("Keep webview alive when switching selection (no shortcut)")
 
         Button {
