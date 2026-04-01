@@ -72,11 +72,12 @@ private struct RemoteGroupWebView: NSViewRepresentable {
     RemoteWebViewCache.setKeepAliveEnabled(keepAlive)
     let webView = RemoteWebViewCache.webView(for: endpointID, keepAlive: keepAlive) {
       let view = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
-      view.uiDelegate = context.coordinator
-      view.navigationDelegate = context.coordinator
       view.allowsBackForwardNavigationGestures = true
       return view
     }
+    // Cached web views may outlive prior coordinators; always rebind delegates.
+    webView.uiDelegate = context.coordinator
+    webView.navigationDelegate = context.coordinator
     context.coordinator.lastReloadToken = reloadToken
     loadIfNeeded(webView: webView, url: url, keepAlive: keepAlive)
     return webView
@@ -84,6 +85,8 @@ private struct RemoteGroupWebView: NSViewRepresentable {
 
   func updateNSView(_ nsView: WKWebView, context: Context) {
     RemoteWebViewCache.setKeepAliveEnabled(keepAlive)
+    nsView.uiDelegate = context.coordinator
+    nsView.navigationDelegate = context.coordinator
     loadIfNeeded(webView: nsView, url: url, keepAlive: keepAlive)
     if context.coordinator.lastReloadToken != reloadToken {
       context.coordinator.lastReloadToken = reloadToken
@@ -135,11 +138,12 @@ private struct RemoteGroupWebView: NSViewRepresentable {
       completionHandler(.useCredential, credential)
     }
 
+    @MainActor
     func webView(
       _ webView: WKWebView,
       runJavaScriptAlertPanelWithMessage message: String,
       initiatedByFrame frame: WKFrameInfo,
-      completionHandler: @escaping @Sendable () -> Void
+      completionHandler: @escaping @MainActor @Sendable () -> Void
     ) {
       _ = runAlert(
         message: message,
