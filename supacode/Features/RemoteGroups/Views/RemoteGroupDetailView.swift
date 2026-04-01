@@ -77,13 +77,13 @@ private struct RemoteGroupWebView: NSViewRepresentable {
       return view
     }
     context.coordinator.lastReloadToken = reloadToken
-    loadIfNeeded(webView: webView, url: url)
+    loadIfNeeded(webView: webView, url: url, keepAlive: keepAlive)
     return webView
   }
 
   func updateNSView(_ nsView: WKWebView, context: Context) {
     RemoteWebViewCache.setKeepAliveEnabled(keepAlive)
-    loadIfNeeded(webView: nsView, url: url)
+    loadIfNeeded(webView: nsView, url: url, keepAlive: keepAlive)
     if context.coordinator.lastReloadToken != reloadToken {
       context.coordinator.lastReloadToken = reloadToken
       nsView.reloadFromOrigin()
@@ -277,8 +277,12 @@ private struct RemoteGroupWebView: NSViewRepresentable {
     }
   }
 
-  private func loadIfNeeded(webView: WKWebView, url: URL) {
-    if webView.url?.absoluteString != url.absoluteString {
+  private func loadIfNeeded(webView: WKWebView, url: URL, keepAlive: Bool) {
+    if RemoteWebViewLoadPolicy.shouldLoad(
+      currentURL: webView.url,
+      targetURL: url,
+      keepAlive: keepAlive
+    ) {
       webView.load(URLRequest(url: url))
     }
   }
@@ -289,6 +293,22 @@ private struct ProtectionSpaceKey: Hashable {
   let port: Int
   let realm: String
   let authenticationMethod: String
+}
+
+nonisolated enum RemoteWebViewLoadPolicy {
+  static func shouldLoad(
+    currentURL: URL?,
+    targetURL: URL,
+    keepAlive: Bool
+  ) -> Bool {
+    guard let currentURL else {
+      return true
+    }
+    guard !keepAlive else {
+      return false
+    }
+    return currentURL.absoluteString != targetURL.absoluteString
+  }
 }
 
 @MainActor
