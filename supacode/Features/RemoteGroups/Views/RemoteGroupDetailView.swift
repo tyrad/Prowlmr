@@ -4,37 +4,94 @@ import WebKit
 
 struct RemoteGroupDetailView: View {
   let endpoint: RemoteEndpoint
+  @AppStorage("remoteGroups_keepWebViewAlive") private var keepWebViewAlive = false
+  @State private var reloadToken: UInt = 0
 
   var body: some View {
-    RemoteGroupWebView(url: endpoint.baseURL)
+    VStack(spacing: 0) {
+      HStack(spacing: 12) {
+        Spacer()
+
+        Toggle("Keep Alive", isOn: $keepWebViewAlive)
+          .toggleStyle(.switch)
+          .help("Keep webview alive when switching selection (no shortcut)")
+          .onChange(of: keepWebViewAlive) { _, enabled in
+            RemoteWebViewCache.setKeepAliveEnabled(enabled)
+          }
+
+        Button {
+          reloadToken &+= 1
+        } label: {
+          Image(systemName: "arrow.clockwise")
+        }
+        .keyboardShortcut("r", modifiers: .command)
+        .help("Force refresh (\u{2318}R)")
+
+        Button {
+          NSWorkspace.shared.open(endpoint.baseURL)
+        } label: {
+          Image(systemName: "safari")
+        }
+        .keyboardShortcut("o", modifiers: [.command, .shift])
+        .help("Open in browser (\u{2318}\u{21E7}O)")
+      }
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+      .background(.bar)
+
+      Divider()
+
+      RemoteGroupWebView(
+        endpointID: endpoint.id,
+        url: endpoint.baseURL,
+        reloadToken: reloadToken,
+        keepAlive: keepWebViewAlive
+      )
       .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .background(Color(nsColor: .windowBackgroundColor))
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Color(nsColor: .windowBackgroundColor))
+    .onAppear {
+      RemoteWebViewCache.setKeepAliveEnabled(keepWebViewAlive)
+    }
   }
 }
 
 private struct RemoteGroupWebView: NSViewRepresentable {
+  let endpointID: UUID
   let url: URL
+  let reloadToken: UInt
+  let keepAlive: Bool
 
   func makeCoordinator() -> Coordinator {
     Coordinator()
   }
 
   func makeNSView(context: Context) -> WKWebView {
-    let webView = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
-    webView.uiDelegate = context.coordinator
-    webView.navigationDelegate = context.coordinator
-    webView.allowsBackForwardNavigationGestures = true
-    webView.load(URLRequest(url: url))
+    RemoteWebViewCache.setKeepAliveEnabled(keepAlive)
+    let webView = RemoteWebViewCache.webView(for: endpointID, keepAlive: keepAlive) {
+      let view = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+      view.uiDelegate = context.coordinator
+      view.navigationDelegate = context.coordinator
+      view.allowsBackForwardNavigationGestures = true
+      return view
+    }
+    context.coordinator.lastReloadToken = reloadToken
+    loadIfNeeded(webView: webView, url: url)
     return webView
   }
 
   func updateNSView(_ nsView: WKWebView, context: Context) {
-    if nsView.url?.absoluteString != url.absoluteString {
-      nsView.load(URLRequest(url: url))
+    RemoteWebViewCache.setKeepAliveEnabled(keepAlive)
+    loadIfNeeded(webView: nsView, url: url)
+    if context.coordinator.lastReloadToken != reloadToken {
+      context.coordinator.lastReloadToken = reloadToken
+      nsView.reloadFromOrigin()
     }
   }
 
   final class Coordinator: NSObject, WKUIDelegate, WKNavigationDelegate {
+    var lastReloadToken: UInt = 0
     private var credentialsByProtectionSpace: [ProtectionSpaceKey: URLCredential] = [:]
 
     @MainActor
@@ -219,6 +276,12 @@ private struct RemoteGroupWebView: NSViewRepresentable {
       return "\(host) requires sign-in.\nRealm: \(realm)"
     }
   }
+
+  private func loadIfNeeded(webView: WKWebView, url: URL) {
+    if webView.url?.absoluteString != url.absoluteString {
+      webView.load(URLRequest(url: url))
+    }
+  }
 }
 
 private struct ProtectionSpaceKey: Hashable {
@@ -226,4 +289,33 @@ private struct ProtectionSpaceKey: Hashable {
   let port: Int
   let realm: String
   let authenticationMethod: String
+}
+
+@MainActor
+private enum RemoteWebViewCache {
+  private static var isKeepAliveEnabled = false
+  private static var webViewsByEndpointID: [UUID: WKWebView] = [:]
+
+  static func setKeepAliveEnabled(_ enabled: Bool) {
+    isKeepAliveEnabled = enabled
+    if !enabled {
+      webViewsByEndpointID.removeAll()
+    }
+  }
+
+  static func webView(
+    for endpointID: UUID,
+    keepAlive: Bool,
+    make: () -> WKWebView
+  ) -> WKWebView {
+    guard keepAlive else {
+      return make()
+    }
+    if let cached = webViewsByEndpointID[endpointID] {
+      return cached
+    }
+    let created = make()
+    webViewsByEndpointID[endpointID] = created
+    return created
+  }
 }
