@@ -24,23 +24,24 @@ struct SettingsView: View {
   var body: some View {
     let updatesStore = store.scope(state: \.updates, action: \.updates)
     let repositories = store.repositories.repositories
-    let selection = settingsStore.selection ?? .general
+    let isUpdatesEnabled = AppUpdatePolicy.current.isEnabled
+    let selection = SettingsSection.resolvedSelection(settingsStore.selection, updatesEnabled: isUpdatesEnabled)
+    let sidebarSelection = Binding<SettingsSection?>(
+      get: {
+        SettingsSection.resolvedSelection(settingsStore.selection, updatesEnabled: isUpdatesEnabled)
+      },
+      set: { newValue in
+        settingsStore.send(.setSelection(newValue))
+      }
+    )
 
     NavigationSplitView(columnVisibility: .constant(.all)) {
       VStack(spacing: 0) {
-        List(selection: $settingsStore.selection.sending(\.setSelection)) {
-          Label("General", systemImage: "gearshape")
-            .tag(SettingsSection.general)
-          Label("Notifications", systemImage: "bell")
-            .tag(SettingsSection.notifications)
-          Label("Worktree", systemImage: "archivebox")
-            .tag(SettingsSection.worktree)
-          Label("Updates", systemImage: "arrow.down.circle")
-            .tag(SettingsSection.updates)
-          Label("Advanced", systemImage: "gearshape.2")
-            .tag(SettingsSection.advanced)
-          Label("GitHub", systemImage: "arrow.triangle.branch")
-            .tag(SettingsSection.github)
+        List(selection: sidebarSelection) {
+          ForEach(SettingsSection.sidebarItems(updatesEnabled: isUpdatesEnabled), id: \.section) { item in
+            Label(item.title, systemImage: item.systemImage)
+              .tag(item.section)
+          }
 
           Section("Repositories") {
             ForEach(repositories) { repository in

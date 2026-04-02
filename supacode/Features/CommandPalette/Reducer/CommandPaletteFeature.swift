@@ -162,18 +162,13 @@ struct CommandPaletteFeature {
 
   static func commandPaletteItems(
     from repositories: RepositoriesFeature.State,
+    isUpdatesEnabled: Bool = true,
     ghosttyCommands: [GhosttyCommand] = []
   ) -> [CommandPaletteItem] {
     let showsNewWorktreeAction =
       repositories.repositories.isEmpty
       || repositories.repositories.contains { $0.capabilities.supportsWorktrees }
     var items: [CommandPaletteItem] = [
-      CommandPaletteItem(
-        id: CommandPaletteItemID.globalCheckForUpdates,
-        title: "Check for Updates",
-        subtitle: nil,
-        kind: .checkForUpdates
-      ),
       CommandPaletteItem(
         id: CommandPaletteItemID.globalOpenSettings,
         title: "Open Settings",
@@ -187,6 +182,17 @@ struct CommandPaletteFeature {
         kind: .openRepository
       ),
     ]
+    if isUpdatesEnabled {
+      items.insert(
+        CommandPaletteItem(
+          id: CommandPaletteItemID.globalCheckForUpdates,
+          title: "Check for Updates",
+          subtitle: nil,
+          kind: .checkForUpdates
+        ),
+        at: 0
+      )
+    }
     if showsNewWorktreeAction {
       items.append(
         CommandPaletteItem(

@@ -197,7 +197,10 @@ struct SupacodeApp: App {
         )
         .help("Command Palette (\(AppShortcuts.commandPalette.display))")
       }
-      UpdateCommands(store: store.scope(state: \.updates, action: \.updates))
+      UpdateCommands(
+        store: store.scope(state: \.updates, action: \.updates),
+        isEnabled: AppUpdatePolicy.current.isEnabled
+      )
       CommandGroup(replacing: .appSettings) {
         Button("Settings...") {
           SettingsWindowManager.shared.show()

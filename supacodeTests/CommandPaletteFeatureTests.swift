@@ -26,6 +26,15 @@ struct CommandPaletteFeatureTests {
     expectNoDifference(items.map(\.id), expectedIDs)
   }
 
+  @Test func commandPaletteItems_omitsCheckForUpdatesWhenDisabled() {
+    let items = CommandPaletteFeature.commandPaletteItems(
+      from: RepositoriesFeature.State(),
+      isUpdatesEnabled: false
+    )
+
+    #expect(items.contains(where: { $0.id == "global.check-for-updates" }) == false)
+  }
+
   @Test func commandPaletteItems_skipsPendingAndDeletingWorktrees() {
     let rootPath = "/tmp/repo"
     let keep = makeWorktree(id: "\(rootPath)/wt-keep", name: "keep", repoRoot: rootPath)
