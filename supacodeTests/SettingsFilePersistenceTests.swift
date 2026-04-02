@@ -18,6 +18,7 @@ struct SettingsFilePersistenceTests {
     }
 
     #expect(settings == .default)
+    #expect(SettingsFile.default.global.updatesAutomaticallyCheckForUpdates == false)
 
     let reloaded: SettingsFile = withDependencies {
       $0.settingsFileStorage = storage.storage

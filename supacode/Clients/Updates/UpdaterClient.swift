@@ -19,6 +19,14 @@ class SparkleUpdateDelegate: NSObject, SPUUpdaterDelegate {
 
 extension UpdaterClient: DependencyKey {
   static let liveValue: UpdaterClient = {
+    guard AppUpdatePolicy.current.isEnabled else {
+      return UpdaterClient(
+        configure: { _, _, _ in },
+        setUpdateChannel: { _ in },
+        checkForUpdates: {}
+      )
+    }
+
     let delegate = SparkleUpdateDelegate()
     let controller = SPUStandardUpdaterController(
       startingUpdater: true,

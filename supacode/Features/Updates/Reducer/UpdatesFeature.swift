@@ -18,6 +18,7 @@ struct UpdatesFeature {
   }
 
   @Dependency(AnalyticsClient.self) private var analyticsClient
+  @Dependency(AppUpdatePolicy.self) private var appUpdatePolicy
   @Dependency(UpdaterClient.self) private var updaterClient
 
   var body: some Reducer<State, Action> {
@@ -26,12 +27,18 @@ struct UpdatesFeature {
       case .applySettings(let channel, let checks, let downloads):
         let checkInBackground = !state.didConfigureUpdates
         state.didConfigureUpdates = true
+        guard appUpdatePolicy.isEnabled else {
+          return .none
+        }
         return .run { _ in
           await updaterClient.setUpdateChannel(channel)
           await updaterClient.configure(checks, downloads, checkInBackground)
         }
 
       case .checkForUpdates:
+        guard appUpdatePolicy.isEnabled else {
+          return .none
+        }
         analyticsClient.capture("update_checked", nil)
         return .run { _ in
           await updaterClient.checkForUpdates()
