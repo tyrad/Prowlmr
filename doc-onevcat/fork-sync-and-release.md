@@ -2,7 +2,7 @@
 
 ## Goal
 
-Keep `onevcat/Prowl` close to `supabitapp/supacode` while preserving local customizations, and publish public releases with Sparkle auto-update support.
+Keep `onevcat/Prowl` close to `supabitapp/supacode` while preserving local customizations, and maintain the fork release infrastructure for public notarized releases.
 
 ## Release Infrastructure
 
