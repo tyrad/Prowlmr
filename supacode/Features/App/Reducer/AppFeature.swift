@@ -675,6 +675,27 @@ struct AppFeature {
       case .repositories:
         return .none
 
+      case .remoteGroups(.selectEndpoint):
+        return .run { _ in
+          await terminalClient.send(.setSelectedWorktreeID(nil))
+        }
+
+      case .remoteGroups(.clearSelection):
+        guard state.remoteGroups.selection != .none else {
+          return .none
+        }
+        if let worktree = state.repositories.selectedTerminalWorktree,
+          !state.repositories.isShowingCanvas,
+          !state.repositories.isShowingArchivedWorktrees
+        {
+          return .run { _ in
+            await terminalClient.send(.setSelectedWorktreeID(worktree.id))
+          }
+        }
+        return .run { _ in
+          await terminalClient.send(.setSelectedWorktreeID(nil))
+        }
+
       case .remoteGroups:
         return .none
 
