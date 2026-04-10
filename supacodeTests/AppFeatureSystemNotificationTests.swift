@@ -148,6 +148,42 @@ struct AppFeatureSystemNotificationTests {
     #expect(sends.value.first?.1 == "Build succeeded")
   }
 
+  @Test(.dependencies) func remoteNotificationReceivedSendsSystemNotificationWhenEnabled() async {
+    var globalSettings = GlobalSettings.default
+    globalSettings.systemNotificationsEnabled = true
+    let endpointID = UUID()
+    let sends = LockIsolated<[(String, String)]>([])
+    let store = TestStore(
+      initialState: AppFeature.State(
+        settings: SettingsFeature.State(settings: globalSettings)
+      )
+    ) {
+      AppFeature()
+    } withDependencies: {
+      $0.systemNotificationClient.send = { title, body in
+        sends.withValue { $0.append((title, body)) }
+      }
+    }
+    store.exhaustivity = .off
+
+    await store.send(
+      .remoteGroups(
+        .delegate(
+          .notificationReceived(
+            endpointID: endpointID,
+            title: "Remote done",
+            body: "Page job succeeded"
+          )
+        )
+      )
+    )
+    await store.finish()
+
+    #expect(sends.value.count == 1)
+    #expect(sends.value.first?.0 == "Remote done")
+    #expect(sends.value.first?.1 == "Page job succeeded")
+  }
+
   @Test(.dependencies) func notificationReceivedSkipsLocalSoundWhenSystemNotificationsEnabled() async {
     var globalSettings = GlobalSettings.default
     globalSettings.systemNotificationsEnabled = true
@@ -208,6 +244,46 @@ struct AppFeatureSystemNotificationTests {
           worktreeID: "/tmp/repo/wt-1",
           title: "Done",
           body: "Build succeeded"
+        )
+      )
+    )
+    await store.finish()
+
+    #expect(plays.value == 1)
+    #expect(sends.value == 0)
+  }
+
+  @Test(.dependencies) func remoteNotificationReceivedPlaysLocalSoundWhenSystemNotificationsDisabled() async {
+    var globalSettings = GlobalSettings.default
+    globalSettings.systemNotificationsEnabled = false
+    globalSettings.notificationSoundEnabled = true
+    let endpointID = UUID()
+    let plays = LockIsolated(0)
+    let sends = LockIsolated(0)
+    let store = TestStore(
+      initialState: AppFeature.State(
+        settings: SettingsFeature.State(settings: globalSettings)
+      )
+    ) {
+      AppFeature()
+    } withDependencies: {
+      $0.notificationSoundClient.play = {
+        plays.withValue { $0 += 1 }
+      }
+      $0.systemNotificationClient.send = { _, _ in
+        sends.withValue { $0 += 1 }
+      }
+    }
+    store.exhaustivity = .off
+
+    await store.send(
+      .remoteGroups(
+        .delegate(
+          .notificationReceived(
+            endpointID: endpointID,
+            title: "Remote done",
+            body: "Page job succeeded"
+          )
         )
       )
     )

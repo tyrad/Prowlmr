@@ -680,6 +680,14 @@ struct AppFeature {
           await terminalClient.send(.setSelectedWorktreeID(nil))
         }
 
+      case .remoteGroups(.delegate(.notificationReceived(_, let title, let body))):
+        return notificationEffects(
+          settings: state.settings,
+          worktreeID: nil,
+          title: title,
+          body: body
+        )
+
       case .remoteGroups(.clearSelection):
         guard state.remoteGroups.selection != .none else {
           return .none
@@ -775,24 +783,12 @@ struct AppFeature {
         return .none
 
       case .terminalEvent(.notificationReceived(let worktreeID, let title, let body)):
-        var effects: [Effect<Action>] = [
-          .send(.repositories(.worktreeNotificationReceived(worktreeID)))
-        ]
-        if state.settings.systemNotificationsEnabled {
-          effects.append(
-            .run { _ in
-              await systemNotificationClient.send(title, body)
-            }
-          )
-        }
-        if state.settings.notificationSoundEnabled && !state.settings.systemNotificationsEnabled {
-          effects.append(
-            .run { _ in
-              await notificationSoundClient.play()
-            }
-          )
-        }
-        return .merge(effects)
+        return notificationEffects(
+          settings: state.settings,
+          worktreeID: worktreeID,
+          title: title,
+          body: body
+        )
 
       case .terminalEvent(.notificationIndicatorChanged(let count)):
         state.notificationIndicatorCount = count
@@ -853,5 +849,34 @@ struct AppFeature {
     Scope(state: \.commandPalette, action: \.commandPalette) {
       CommandPaletteFeature()
     }
+  }
+}
+
+private extension AppFeature {
+  func notificationEffects(
+    settings: SettingsFeature.State,
+    worktreeID: Worktree.ID?,
+    title: String,
+    body: String
+  ) -> Effect<Action> {
+    var effects: [Effect<Action>] = []
+    if let worktreeID {
+      effects.append(.send(.repositories(.worktreeNotificationReceived(worktreeID))))
+    }
+    if settings.systemNotificationsEnabled {
+      effects.append(
+        .run { _ in
+          await systemNotificationClient.send(title, body)
+        }
+      )
+    }
+    if settings.notificationSoundEnabled && !settings.systemNotificationsEnabled {
+      effects.append(
+        .run { _ in
+          await notificationSoundClient.play()
+        }
+      )
+    }
+    return .merge(effects)
   }
 }

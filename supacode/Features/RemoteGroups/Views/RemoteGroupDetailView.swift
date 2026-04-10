@@ -6,13 +6,15 @@ struct RemoteGroupDetailView: View {
   let endpoint: RemoteEndpoint
   let reloadToken: UInt
   let keepWebViewAlive: Bool
+  let onNotification: (RemoteBridgeNotificationRequest) -> Void
 
   var body: some View {
     RemoteGroupWebView(
       endpointID: endpoint.id,
       url: endpoint.baseURL,
       reloadToken: reloadToken,
-      keepAlive: keepWebViewAlive
+      keepAlive: keepWebViewAlive,
+      onNotification: onNotification
     )
     .id(endpoint.id)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -28,30 +30,31 @@ private struct RemoteGroupWebView: NSViewRepresentable {
   let url: URL
   let reloadToken: UInt
   let keepAlive: Bool
+  let onNotification: (RemoteBridgeNotificationRequest) -> Void
 
   func makeCoordinator() -> Coordinator {
     Coordinator()
   }
 
-  func makeNSView(context: Context) -> WKWebView {
+  func makeNSView(context: Context) -> RemoteBridgeWebView {
     RemoteWebViewCache.setKeepAliveEnabled(keepAlive)
     let webView = RemoteWebViewCache.webView(for: endpointID, keepAlive: keepAlive) {
-      let view = WKWebView(frame: .zero, configuration: RemoteWebViewEnvironment.makeConfiguration())
-      view.allowsBackForwardNavigationGestures = true
-      return view
+      RemoteBridgeWebView(endpointURL: url)
     }
     // Cached web views may outlive prior coordinators; always rebind delegates.
     webView.uiDelegate = context.coordinator
     webView.navigationDelegate = context.coordinator
+    webView.rebindBridge(onNotification: onNotification)
     context.coordinator.lastReloadToken = reloadToken
     loadIfNeeded(webView: webView, url: url, keepAlive: keepAlive)
     return webView
   }
 
-  func updateNSView(_ nsView: WKWebView, context: Context) {
+  func updateNSView(_ nsView: RemoteBridgeWebView, context: Context) {
     RemoteWebViewCache.setKeepAliveEnabled(keepAlive)
     nsView.uiDelegate = context.coordinator
     nsView.navigationDelegate = context.coordinator
+    nsView.rebindBridge(onNotification: onNotification)
     loadIfNeeded(webView: nsView, url: url, keepAlive: keepAlive)
     if context.coordinator.lastReloadToken != reloadToken {
       context.coordinator.lastReloadToken = reloadToken
@@ -107,16 +110,14 @@ private struct RemoteGroupWebView: NSViewRepresentable {
     func webView(
       _ webView: WKWebView,
       runJavaScriptAlertPanelWithMessage message: String,
-      initiatedByFrame frame: WKFrameInfo,
-      completionHandler: @escaping @MainActor @Sendable () -> Void
-    ) {
+      initiatedByFrame frame: WKFrameInfo
+    ) async {
       _ = runAlert(
         message: message,
         style: .informational,
         defaultButtonTitle: "OK",
         alternateButtonTitle: nil
       )
-      completionHandler()
     }
 
     @MainActor
@@ -157,6 +158,7 @@ private struct RemoteGroupWebView: NSViewRepresentable {
       completionHandler(response == .alertFirstButtonReturn ? textField.stringValue : nil)
     }
 
+    @MainActor
     func webView(
       _ webView: WKWebView,
       createWebViewWith configuration: WKWebViewConfiguration,
@@ -170,6 +172,7 @@ private struct RemoteGroupWebView: NSViewRepresentable {
       return nil
     }
 
+    @MainActor
     private func runAlert(
       message: String,
       style: NSAlert.Style,
@@ -191,6 +194,7 @@ private struct RemoteGroupWebView: NSViewRepresentable {
         || method == NSURLAuthenticationMethodHTTPDigest
     }
 
+    @MainActor
     private func promptCredential(
       for protectionSpace: URLProtectionSpace,
       prefilledUsername: String?
@@ -255,6 +259,64 @@ private struct RemoteGroupWebView: NSViewRepresentable {
     ) {
       webView.load(URLRequest(url: url))
     }
+  }
+}
+
+@MainActor
+private final class RemoteBridgeWebView: WKWebView {
+  private let endpointURL: URL
+  private var bridgeHandler: RemoteBridgeMessageHandler?
+
+  init(endpointURL: URL) {
+    self.endpointURL = endpointURL
+    super.init(frame: .zero, configuration: RemoteWebViewEnvironment.makeConfiguration())
+    allowsBackForwardNavigationGestures = true
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  func rebindBridge(onNotification: @escaping (RemoteBridgeNotificationRequest) -> Void) {
+    configuration.userContentController.removeScriptMessageHandler(forName: RemoteWebViewBridge.handlerName)
+    let handler = RemoteBridgeMessageHandler(
+      endpointURL: endpointURL,
+      onNotification: onNotification
+    )
+    configuration.userContentController.add(handler, name: RemoteWebViewBridge.handlerName)
+    bridgeHandler = handler
+  }
+}
+
+@MainActor
+private final class RemoteBridgeMessageHandler: NSObject, WKScriptMessageHandler {
+  private let endpointURL: URL
+  private let onNotification: (RemoteBridgeNotificationRequest) -> Void
+
+  init(
+    endpointURL: URL,
+    onNotification: @escaping (RemoteBridgeNotificationRequest) -> Void
+  ) {
+    self.endpointURL = endpointURL
+    self.onNotification = onNotification
+  }
+
+  func userContentController(
+    _ userContentController: WKUserContentController,
+    didReceive message: WKScriptMessage
+  ) {
+    guard message.name == RemoteWebViewBridge.handlerName else {
+      return
+    }
+    guard let request = RemoteWebViewBridge.notificationRequest(
+      from: message.body,
+      originURL: message.frameInfo.request.url,
+      endpointURL: endpointURL
+    ) else {
+      return
+    }
+    onNotification(request)
   }
 }
 
@@ -371,7 +433,7 @@ nonisolated enum RemoteWebViewLoadPolicy {
 @MainActor
 private enum RemoteWebViewCache {
   private static var isKeepAliveEnabled = false
-  private static var webViewsByEndpointID: [UUID: WKWebView] = [:]
+  private static var webViewsByEndpointID: [UUID: RemoteBridgeWebView] = [:]
 
   static func setKeepAliveEnabled(_ enabled: Bool) {
     isKeepAliveEnabled = enabled
@@ -383,8 +445,8 @@ private enum RemoteWebViewCache {
   static func webView(
     for endpointID: UUID,
     keepAlive: Bool,
-    make: () -> WKWebView
-  ) -> WKWebView {
+    make: () -> RemoteBridgeWebView
+  ) -> RemoteBridgeWebView {
     guard keepAlive else {
       return make()
     }

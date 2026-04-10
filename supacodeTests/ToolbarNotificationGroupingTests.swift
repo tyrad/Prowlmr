@@ -1,14 +1,17 @@
+import DependenciesTestSupport
 import Foundation
 import IdentifiedCollections
+import Sharing
 import Testing
 
 @testable import supacode
 
 @MainActor
 struct ToolbarNotificationGroupingTests {
-  @Test func groupsNotificationsByRepositoryAndWorktreeInDisplayOrder() {
+  @Test(.dependencies) func groupsNotificationsByRepositoryAndRemoteEndpointInDisplayOrder() {
     let repoAPath = "/tmp/repo-a"
     let repoBPath = "/tmp/repo-b"
+    let remoteEndpointID = UUID()
 
     let repoAMain = makeWorktree(id: repoAPath, name: "main", repoRoot: repoAPath)
     let repoAOne = makeWorktree(id: "\(repoAPath)/one", name: "one", repoRoot: repoAPath)
@@ -19,6 +22,25 @@ struct ToolbarNotificationGroupingTests {
 
     let repoA = makeRepository(id: repoAPath, name: "Repo A", worktrees: [repoAMain, repoAOne, repoATwo])
     let repoB = makeRepository(id: repoBPath, name: "Repo B", worktrees: [repoBMain, repoBOne])
+    let remoteState = makeRemoteState(
+      endpoints: [
+        RemoteEndpoint(
+          id: remoteEndpointID,
+          baseURL: URL(string: "https://remote.example.com/mini-terminal/")!
+        )
+      ],
+      notificationsByEndpointID: [
+        remoteEndpointID: [
+          RemotePageNotification(
+            id: UUID(),
+            endpointID: remoteEndpointID,
+            title: "Remote A",
+            body: "done",
+            createdAt: Date(timeIntervalSince1970: 10)
+          )
+        ]
+      ]
+    )
 
     var state = RepositoriesFeature.State(repositories: [repoA, repoB])
     state.repositoryRoots = [repoA.rootURL, repoB.rootURL]
@@ -36,15 +58,20 @@ struct ToolbarNotificationGroupingTests {
       WorktreeTerminalNotification(surfaceId: UUID(), title: "B1", body: "done", isRead: true)
     ]
 
-    let groups = state.toolbarNotificationGroups(terminalManager: manager)
+    let groups = state.toolbarNotificationGroups(
+      terminalManager: manager,
+      remoteGroups: remoteState
+    )
 
-    #expect(groups.map(\.id) == [repoB.id, repoA.id])
-    #expect(groups[0].worktrees.map(\.id) == [repoBOne.id])
-    #expect(groups[1].worktrees.map(\.id) == [repoATwo.id, repoAOne.id])
-    #expect(groups[1].unseenWorktreeCount == 1)
+    #expect(groups.map(\.name) == ["Repo B", "Repo A", "Remote"])
+    #expect(groups[0].sources.map(\.name) == ["one"])
+    #expect(groups[1].sources.map(\.name) == ["two", "one"])
+    #expect(groups[2].sources.map(\.name) == ["remote.example.com"])
+    #expect(groups[1].unseenSourceCount == 1)
+    #expect(groups[2].sources[0].target == .remote(endpointID: remoteEndpointID))
   }
 
-  @Test func omitsArchivedAndEmptyNotificationGroups() {
+  @Test(.dependencies) func omitsArchivedAndEmptyNotificationGroups() {
     let repoAPath = "/tmp/repo-a"
     let repoBPath = "/tmp/repo-b"
 
@@ -65,13 +92,17 @@ struct ToolbarNotificationGroupingTests {
       WorktreeTerminalNotification(surfaceId: UUID(), title: "Archived", body: "hidden")
     ]
 
-    let groups = state.toolbarNotificationGroups(terminalManager: manager)
+    let groups = state.toolbarNotificationGroups(
+      terminalManager: manager,
+      remoteGroups: makeRemoteState()
+    )
 
     #expect(groups.isEmpty)
   }
 
-  @Test func unseenWorktreeCountUsesUnreadNotificationsOnly() {
+  @Test(.dependencies) func unseenSourceCountUsesUnreadNotificationsOnlyAcrossTerminalAndRemote() {
     let repoPath = "/tmp/repo"
+    let remoteEndpointID = UUID()
     let main = makeWorktree(id: repoPath, name: "main", repoRoot: repoPath)
     let readOnly = makeWorktree(id: "\(repoPath)/read-only", name: "read-only", repoRoot: repoPath)
     let mixed = makeWorktree(id: "\(repoPath)/mixed", name: "mixed", repoRoot: repoPath)
@@ -88,16 +119,50 @@ struct ToolbarNotificationGroupingTests {
       WorktreeTerminalNotification(surfaceId: UUID(), title: "Read 2", body: "done", isRead: true),
       WorktreeTerminalNotification(surfaceId: UUID(), title: "Unread", body: "new", isRead: false),
     ]
+    let remoteState = makeRemoteState(
+      endpoints: [
+        RemoteEndpoint(
+          id: remoteEndpointID,
+          baseURL: URL(string: "https://remote.example.com/mini-terminal/")!
+        )
+      ],
+      notificationsByEndpointID: [
+        remoteEndpointID: [
+          RemotePageNotification(
+            id: UUID(),
+            endpointID: remoteEndpointID,
+            title: "Remote read",
+            body: "done",
+            isRead: true,
+            createdAt: Date(timeIntervalSince1970: 10)
+          ),
+          RemotePageNotification(
+            id: UUID(),
+            endpointID: remoteEndpointID,
+            title: "Remote unread",
+            body: "new",
+            isRead: false,
+            createdAt: Date(timeIntervalSince1970: 20)
+          ),
+        ]
+      ]
+    )
 
-    let groups = state.toolbarNotificationGroups(terminalManager: manager)
+    let groups = state.toolbarNotificationGroups(
+      terminalManager: manager,
+      remoteGroups: remoteState
+    )
 
-    #expect(groups.count == 1)
+    #expect(groups.count == 2)
     #expect(groups[0].notificationCount == 3)
-    #expect(groups[0].unseenWorktreeCount == 1)
+    #expect(groups[0].unseenSourceCount == 1)
+    #expect(groups[1].notificationCount == 2)
+    #expect(groups[1].unseenSourceCount == 1)
   }
 
-  @Test func keepsReadOnlyNotificationsInGroups() {
+  @Test(.dependencies) func keepsReadOnlyNotificationsInTerminalAndRemoteGroups() {
     let repoPath = "/tmp/repo"
+    let remoteEndpointID = UUID()
     let main = makeWorktree(id: repoPath, name: "main", repoRoot: repoPath)
     let feature = makeWorktree(id: "\(repoPath)/feature", name: "feature", repoRoot: repoPath)
 
@@ -109,12 +174,38 @@ struct ToolbarNotificationGroupingTests {
     manager.state(for: feature).notifications = [
       WorktreeTerminalNotification(surfaceId: UUID(), title: "Read", body: "kept", isRead: true)
     ]
+    let remoteState = makeRemoteState(
+      endpoints: [
+        RemoteEndpoint(
+          id: remoteEndpointID,
+          baseURL: URL(string: "https://remote.example.com/mini-terminal/")!
+        )
+      ],
+      notificationsByEndpointID: [
+        remoteEndpointID: [
+          RemotePageNotification(
+            id: UUID(),
+            endpointID: remoteEndpointID,
+            title: "Remote read",
+            body: "kept",
+            isRead: true,
+            createdAt: Date(timeIntervalSince1970: 10)
+          )
+        ]
+      ]
+    )
 
-    let groups = state.toolbarNotificationGroups(terminalManager: manager)
+    let groups = state.toolbarNotificationGroups(
+      terminalManager: manager,
+      remoteGroups: remoteState
+    )
 
-    #expect(groups.map(\.id) == [repo.id])
-    #expect(groups[0].worktrees.map(\.id) == [feature.id])
-    #expect(groups[0].unseenWorktreeCount == 0)
+    #expect(groups.map(\.name) == ["Repo", "Remote"])
+    #expect(groups[0].sources.map(\.name) == ["feature"])
+    #expect(groups[0].sources[0].items.map(\.content) == ["Read - kept"])
+    #expect(groups[0].unseenSourceCount == 0)
+    #expect(groups[1].sources[0].items.map(\.content) == ["Remote read - kept"])
+    #expect(groups[1].unseenSourceCount == 0)
   }
 
   private func makeWorktree(
@@ -142,5 +233,17 @@ struct ToolbarNotificationGroupingTests {
       name: name,
       worktrees: IdentifiedArray(uniqueElements: worktrees)
     )
+  }
+
+  private func makeRemoteState(
+    endpoints: [RemoteEndpoint] = [],
+    notificationsByEndpointID: [UUID: [RemotePageNotification]] = [:]
+  ) -> RemoteGroupsFeature.State {
+    var state = RemoteGroupsFeature.State()
+    state.$endpoints.withLock {
+      $0 = endpoints
+    }
+    state.notificationsByEndpointID = notificationsByEndpointID
+    return state
   }
 }

@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct ToolbarNotificationsPopoverButton: View {
-  let groups: [ToolbarNotificationRepositoryGroup]
-  let unseenWorktreeCount: Int
-  let onSelectNotification: (Worktree.ID, WorktreeTerminalNotification) -> Void
+  let groups: [ToolbarNotificationGroup]
+  let unseenSourceCount: Int
+  let onSelectNotification: (ToolbarNotificationItem) -> Void
   let onDismissAll: () -> Void
   @State private var isPresented = false
   @State private var isPinnedOpen = false
@@ -12,10 +12,10 @@ struct ToolbarNotificationsPopoverButton: View {
   @State private var closeTask: Task<Void, Never>?
 
   private var notificationCount: Int {
-    groups.reduce(0) { count, repository in
+    groups.reduce(0) { count, group in
       count
-        + repository.worktrees.reduce(0) { worktreeCount, worktree in
-          worktreeCount + worktree.notifications.filter { !$0.isRead }.count
+        + group.sources.reduce(0) { sourceCount, source in
+          sourceCount + source.items.filter { !$0.isRead }.count
         }
     }
   }
@@ -25,8 +25,8 @@ struct ToolbarNotificationsPopoverButton: View {
       togglePresentation()
     } label: {
       HStack(spacing: 6) {
-        Image(systemName: unseenWorktreeCount > 0 ? "bell.badge.fill" : "bell.fill")
-          .foregroundStyle(unseenWorktreeCount > 0 ? .orange : .secondary)
+        Image(systemName: unseenSourceCount > 0 ? "bell.badge.fill" : "bell.fill")
+          .foregroundStyle(unseenSourceCount > 0 ? .orange : .secondary)
           .accessibilityHidden(true)
         if notificationCount > 0 {
           Text(notificationCount, format: .number)
@@ -43,8 +43,8 @@ struct ToolbarNotificationsPopoverButton: View {
     .popover(isPresented: $isPresented) {
       ToolbarNotificationsPopoverView(
         groups: groups,
-        onSelectNotification: { worktreeID, notification in
-          onSelectNotification(worktreeID, notification)
+        onSelectNotification: { item in
+          onSelectNotification(item)
           closePopover()
         },
         onDismissAll: {

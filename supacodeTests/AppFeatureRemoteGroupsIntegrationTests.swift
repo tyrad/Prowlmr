@@ -7,7 +7,7 @@ import Testing
 
 @MainActor
 struct AppFeatureRemoteGroupsIntegrationTests {
-  @Test func app_routes_remote_groups_actions() async {
+  @Test(.dependencies) func app_routes_remote_groups_actions() async {
     let store = TestStore(initialState: AppFeature.State()) {
       AppFeature()
     }

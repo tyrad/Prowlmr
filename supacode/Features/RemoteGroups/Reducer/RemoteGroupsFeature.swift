@@ -8,8 +8,13 @@ struct RemoteGroupsFeature {
   struct State: Equatable {
     @Shared(.appStorage("remoteGroups_endpoints")) var endpoints: [RemoteEndpoint] = []
     @Shared(.appStorage("remoteGroups_selection")) var selection: RemoteSelection = .none
+    var notificationsByEndpointID: [UUID: [RemotePageNotification]] = [:]
     var isAddPromptPresented = false
     var addURLDraft = ""
+
+    func notifications(for endpointID: UUID) -> [RemotePageNotification] {
+      notificationsByEndpointID[endpointID] ?? []
+    }
   }
 
   enum Action: Equatable {
@@ -19,7 +24,18 @@ struct RemoteGroupsFeature {
     case removeEndpoint(UUID)
     case clearSelection
     case selectEndpoint(UUID)
+    case receiveBridgeNotification(endpointID: UUID, title: String, body: String, tag: String?)
+    case markNotificationRead(endpointID: UUID, notificationID: UUID)
+    case dismissAllNotifications
+    case delegate(Delegate)
   }
+
+  enum Delegate: Equatable {
+    case notificationReceived(endpointID: UUID, title: String, body: String)
+  }
+
+  @Dependency(\.date.now) private var now
+  @Dependency(\.uuid) private var uuid
 
   var body: some Reducer<State, Action> {
     Reduce { state, action in
@@ -68,6 +84,7 @@ struct RemoteGroupsFeature {
         state.$endpoints.withLock {
           $0.removeAll(where: { $0.id == endpointID })
         }
+        state.notificationsByEndpointID.removeValue(forKey: endpointID)
 
         if state.selection.matches(endpointID: endpointID) {
           state.$selection.withLock {
@@ -86,6 +103,68 @@ struct RemoteGroupsFeature {
         state.$selection.withLock {
           $0 = .overview(endpointID: endpointID)
         }
+        return .none
+
+      case .receiveBridgeNotification(let endpointID, let title, let body, let tag):
+        guard state.endpoints.contains(where: { $0.id == endpointID }) else {
+          return .none
+        }
+
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !(trimmedTitle.isEmpty && trimmedBody.isEmpty) else {
+          return .none
+        }
+
+        let resolvedTitle: String
+        let resolvedBody: String
+        if trimmedTitle.isEmpty {
+          resolvedTitle = trimmedBody
+          resolvedBody = ""
+        } else {
+          resolvedTitle = trimmedTitle
+          resolvedBody = trimmedBody
+        }
+
+        let trimmedTag = tag?.trimmingCharacters(in: .whitespacesAndNewlines)
+        state.notificationsByEndpointID[endpointID, default: []].insert(
+          RemotePageNotification(
+            id: uuid(),
+            endpointID: endpointID,
+            title: resolvedTitle,
+            body: resolvedBody,
+            tag: trimmedTag?.isEmpty == true ? nil : trimmedTag,
+            createdAt: now
+          ),
+          at: 0
+        )
+
+        return .send(
+          .delegate(
+            .notificationReceived(
+              endpointID: endpointID,
+              title: resolvedTitle,
+              body: resolvedBody
+            )
+          )
+        )
+
+      case .markNotificationRead(let endpointID, let notificationID):
+        guard var notifications = state.notificationsByEndpointID[endpointID] else {
+          return .none
+        }
+        guard let index = notifications.firstIndex(where: { $0.id == notificationID }) else {
+          return .none
+        }
+        notifications[index].isRead = true
+        state.notificationsByEndpointID[endpointID] = notifications
+        return .none
+
+      case .dismissAllNotifications:
+        state.notificationsByEndpointID = [:]
+        return .none
+
+      case .delegate:
         return .none
       }
     }

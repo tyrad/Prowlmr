@@ -13,6 +13,10 @@ nonisolated struct RemoteEndpoint: Equatable, Codable, Identifiable, Sendable {
     baseURL
   }
 
+  var displayName: String {
+    baseURL.host(percentEncoded: false) ?? baseURL.absoluteString
+  }
+
   func groupURL(group: String) -> URL {
     baseURL.appending(queryItems: [URLQueryItem(name: "group", value: group)])
   }

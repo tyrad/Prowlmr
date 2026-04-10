@@ -10,8 +10,8 @@ struct WorktreeDetailView: View {
   private struct ToolbarStateInput {
     let repositories: RepositoriesFeature.State
     let selectedWorktree: Worktree?
-    let notificationGroups: [ToolbarNotificationRepositoryGroup]
-    let unseenNotificationWorktreeCount: Int
+    let notificationGroups: [ToolbarNotificationGroup]
+    let unseenNotificationSourceCount: Int
     let openActionSelection: OpenWorktreeAction
     let showExtras: Bool
     let runScriptEnabled: Bool
@@ -55,9 +55,12 @@ struct WorktreeDetailView: View {
     let runScriptEnabled = hasActiveTerminalTarget
     let runScriptIsRunning = selectedTerminalWorktree.flatMap { state.runScriptStatusByWorktreeID[$0.id] } == true
     let customCommands = state.selectedCustomCommands
-    let notificationGroups = repositories.toolbarNotificationGroups(terminalManager: terminalManager)
-    let unseenNotificationWorktreeCount = notificationGroups.reduce(0) { count, repository in
-      count + repository.unseenWorktreeCount
+    let notificationGroups = repositories.toolbarNotificationGroups(
+      terminalManager: terminalManager,
+      remoteGroups: state.remoteGroups
+    )
+    let unseenNotificationSourceCount = notificationGroups.reduce(0) { count, group in
+      count + group.unseenSourceCount
     }
     let content = AnyView(
       detailContent(
@@ -74,7 +77,7 @@ struct WorktreeDetailView: View {
           repositories: repositories,
           remoteDetailContext: remoteDetailContext,
           notificationGroups: notificationGroups,
-          unseenNotificationWorktreeCount: unseenNotificationWorktreeCount
+          unseenNotificationSourceCount: unseenNotificationSourceCount
         )
       }
       .toolbar {
@@ -86,7 +89,7 @@ struct WorktreeDetailView: View {
               repositories: repositories,
               selectedWorktree: selectedWorktree,
               notificationGroups: notificationGroups,
-              unseenNotificationWorktreeCount: unseenNotificationWorktreeCount,
+              unseenNotificationSourceCount: unseenNotificationSourceCount,
               openActionSelection: openActionSelection,
               showExtras: commandKeyObserver.isPressed,
               runScriptEnabled: runScriptEnabled,
@@ -153,7 +156,7 @@ struct WorktreeDetailView: View {
       statusToast: input.repositories.statusToast,
       pullRequest: matchesBranch ? pullRequest : nil,
       notificationGroups: input.notificationGroups,
-      unseenNotificationWorktreeCount: input.unseenNotificationWorktreeCount,
+      unseenNotificationSourceCount: input.unseenNotificationSourceCount,
       openActionSelection: input.openActionSelection,
       showExtras: input.showExtras,
       runScriptEnabled: input.runScriptEnabled,
@@ -166,14 +169,14 @@ struct WorktreeDetailView: View {
   private func detailToolbarContent(
     repositories: RepositoriesFeature.State,
     remoteDetailContext: RemoteDetailContext?,
-    notificationGroups: [ToolbarNotificationRepositoryGroup],
-    unseenNotificationWorktreeCount: Int
+    notificationGroups: [ToolbarNotificationGroup],
+    unseenNotificationSourceCount: Int
   ) -> some ToolbarContent {
     if repositories.isShowingCanvas {
       ToolbarItem(placement: .primaryAction) {
         ToolbarNotificationsPopoverButton(
           groups: notificationGroups,
-          unseenWorktreeCount: unseenNotificationWorktreeCount,
+          unseenSourceCount: unseenNotificationSourceCount,
           onSelectNotification: selectToolbarNotification,
           onDismissAll: { dismissAllToolbarNotifications(in: notificationGroups) }
         )
@@ -188,7 +191,7 @@ struct WorktreeDetailView: View {
 
           ToolbarNotificationsPopoverButton(
             groups: notificationGroups,
-            unseenWorktreeCount: unseenNotificationWorktreeCount,
+            unseenSourceCount: unseenNotificationSourceCount,
             onSelectNotification: selectToolbarNotification,
             onDismissAll: { dismissAllToolbarNotifications(in: notificationGroups) }
           )
@@ -265,7 +268,19 @@ struct WorktreeDetailView: View {
       RemoteGroupDetailView(
         endpoint: remoteDetailContext.endpoint,
         reloadToken: remoteReloadToken,
-        keepWebViewAlive: keepRemoteWebViewAlive
+        keepWebViewAlive: keepRemoteWebViewAlive,
+        onNotification: { request in
+          store.send(
+            .remoteGroups(
+              .receiveBridgeNotification(
+                endpointID: remoteDetailContext.endpoint.id,
+                title: request.title,
+                body: request.body,
+                tag: request.tag
+              )
+            )
+          )
+        }
       )
     } else if repositories.isShowingCanvas {
       CanvasView(
@@ -432,22 +447,28 @@ struct WorktreeDetailView: View {
     )
   }
 
-  private func selectToolbarNotification(
-    _ worktreeID: Worktree.ID,
-    _ notification: WorktreeTerminalNotification
-  ) {
-    store.send(.repositories(.selectWorktree(worktreeID)))
-    if let terminalState = terminalManager.stateIfExists(for: worktreeID) {
-      _ = terminalState.focusSurface(id: notification.surfaceId)
+  private func selectToolbarNotification(_ item: ToolbarNotificationItem) {
+    switch item {
+    case .terminal(let worktreeID, let notification):
+      store.send(.repositories(.selectWorktree(worktreeID)))
+      if let terminalState = terminalManager.stateIfExists(for: worktreeID) {
+        _ = terminalState.focusSurface(id: notification.surfaceId)
+      }
+    case .remote(let endpointID, let notification):
+      store.send(.remoteGroups(.markNotificationRead(endpointID: endpointID, notificationID: notification.id)))
+      store.send(.remoteGroups(.selectEndpoint(endpointID)))
     }
   }
 
-  private func dismissAllToolbarNotifications(in groups: [ToolbarNotificationRepositoryGroup]) {
-    for repositoryGroup in groups {
-      for worktreeGroup in repositoryGroup.worktrees {
-        terminalManager.stateIfExists(for: worktreeGroup.id)?.dismissAllNotifications()
+  private func dismissAllToolbarNotifications(in groups: [ToolbarNotificationGroup]) {
+    for group in groups {
+      for source in group.sources {
+        if case .terminal(let worktreeID) = source.target {
+          terminalManager.stateIfExists(for: worktreeID)?.dismissAllNotifications()
+        }
       }
     }
+    store.send(.remoteGroups(.dismissAllNotifications))
   }
 
   private struct FocusedActions {
@@ -479,8 +500,8 @@ struct WorktreeDetailView: View {
     let title: DetailToolbarTitle
     let statusToast: RepositoriesFeature.StatusToast?
     let pullRequest: GithubPullRequest?
-    let notificationGroups: [ToolbarNotificationRepositoryGroup]
-    let unseenNotificationWorktreeCount: Int
+    let notificationGroups: [ToolbarNotificationGroup]
+    let unseenNotificationSourceCount: Int
     let openActionSelection: OpenWorktreeAction
     let showExtras: Bool
     let runScriptEnabled: Bool
@@ -502,7 +523,7 @@ struct WorktreeDetailView: View {
     let onOpenWorktree: (OpenWorktreeAction) -> Void
     let onOpenActionSelectionChanged: (OpenWorktreeAction) -> Void
     let onCopyPath: () -> Void
-    let onSelectNotification: (Worktree.ID, WorktreeTerminalNotification) -> Void
+    let onSelectNotification: (ToolbarNotificationItem) -> Void
     let onDismissAllNotifications: () -> Void
     let onRunScript: () -> Void
     let onStopRunScript: () -> Void
@@ -530,7 +551,7 @@ struct WorktreeDetailView: View {
       ToolbarItemGroup {
         ToolbarNotificationsPopoverButton(
           groups: toolbarState.notificationGroups,
-          unseenWorktreeCount: toolbarState.unseenNotificationWorktreeCount,
+          unseenSourceCount: toolbarState.unseenNotificationSourceCount,
           onSelectNotification: onSelectNotification,
           onDismissAll: onDismissAllNotifications
         )
@@ -863,7 +884,7 @@ private struct WorktreeToolbarPreview: View {
       statusToast: nil,
       pullRequest: nil,
       notificationGroups: [],
-      unseenNotificationWorktreeCount: 0,
+      unseenNotificationSourceCount: 0,
       openActionSelection: .finder,
       showExtras: false,
       runScriptEnabled: true,
@@ -898,7 +919,7 @@ private struct WorktreeToolbarPreview: View {
         onOpenWorktree: { _ in },
         onOpenActionSelectionChanged: { _ in },
         onCopyPath: {},
-        onSelectNotification: { _, _ in },
+        onSelectNotification: { _ in },
         onDismissAllNotifications: {},
         onRunScript: {},
         onStopRunScript: {},
@@ -931,8 +952,8 @@ private struct CanvasToolbarPreview: View {
           ToolbarItem(placement: .primaryAction) {
             ToolbarNotificationsPopoverButton(
               groups: [],
-              unseenWorktreeCount: 0,
-              onSelectNotification: { _, _ in },
+              unseenSourceCount: 0,
+              onSelectNotification: { _ in },
               onDismissAll: {}
             )
           }
