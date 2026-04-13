@@ -6,7 +6,7 @@ struct RemoteGroupDetailView: View {
   let endpoint: RemoteEndpoint
   let reloadToken: UInt
   let keepWebViewAlive: Bool
-  let onNotification: (RemoteBridgeNotificationRequest) -> Void
+  let onBridgeRequest: (RemoteBridgeRequest) -> Void
 
   var body: some View {
     RemoteGroupWebView(
@@ -14,7 +14,7 @@ struct RemoteGroupDetailView: View {
       url: endpoint.baseURL,
       reloadToken: reloadToken,
       keepAlive: keepWebViewAlive,
-      onNotification: onNotification
+      onBridgeRequest: onBridgeRequest
     )
     .id(endpoint.id)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -30,7 +30,7 @@ private struct RemoteGroupWebView: NSViewRepresentable {
   let url: URL
   let reloadToken: UInt
   let keepAlive: Bool
-  let onNotification: (RemoteBridgeNotificationRequest) -> Void
+  let onBridgeRequest: (RemoteBridgeRequest) -> Void
 
   func makeCoordinator() -> Coordinator {
     Coordinator()
@@ -44,7 +44,7 @@ private struct RemoteGroupWebView: NSViewRepresentable {
     // Cached web views may outlive prior coordinators; always rebind delegates.
     webView.uiDelegate = context.coordinator
     webView.navigationDelegate = context.coordinator
-    webView.rebindBridge(onNotification: onNotification)
+    webView.rebindBridge(onBridgeRequest: onBridgeRequest)
     context.coordinator.lastReloadToken = reloadToken
     loadIfNeeded(webView: webView, url: url, keepAlive: keepAlive)
     return webView
@@ -54,7 +54,7 @@ private struct RemoteGroupWebView: NSViewRepresentable {
     RemoteWebViewCache.setKeepAliveEnabled(keepAlive)
     nsView.uiDelegate = context.coordinator
     nsView.navigationDelegate = context.coordinator
-    nsView.rebindBridge(onNotification: onNotification)
+    nsView.rebindBridge(onBridgeRequest: onBridgeRequest)
     loadIfNeeded(webView: nsView, url: url, keepAlive: keepAlive)
     if context.coordinator.lastReloadToken != reloadToken {
       context.coordinator.lastReloadToken = reloadToken
@@ -278,11 +278,11 @@ private final class RemoteBridgeWebView: WKWebView {
     fatalError("init(coder:) has not been implemented")
   }
 
-  func rebindBridge(onNotification: @escaping (RemoteBridgeNotificationRequest) -> Void) {
+  func rebindBridge(onBridgeRequest: @escaping (RemoteBridgeRequest) -> Void) {
     configuration.userContentController.removeScriptMessageHandler(forName: RemoteWebViewBridge.handlerName)
     let handler = RemoteBridgeMessageHandler(
       endpointURL: endpointURL,
-      onNotification: onNotification
+      onBridgeRequest: onBridgeRequest
     )
     configuration.userContentController.add(handler, name: RemoteWebViewBridge.handlerName)
     bridgeHandler = handler
@@ -292,14 +292,14 @@ private final class RemoteBridgeWebView: WKWebView {
 @MainActor
 private final class RemoteBridgeMessageHandler: NSObject, WKScriptMessageHandler {
   private let endpointURL: URL
-  private let onNotification: (RemoteBridgeNotificationRequest) -> Void
+  private let onBridgeRequest: (RemoteBridgeRequest) -> Void
 
   init(
     endpointURL: URL,
-    onNotification: @escaping (RemoteBridgeNotificationRequest) -> Void
+    onBridgeRequest: @escaping (RemoteBridgeRequest) -> Void
   ) {
     self.endpointURL = endpointURL
-    self.onNotification = onNotification
+    self.onBridgeRequest = onBridgeRequest
   }
 
   func userContentController(
@@ -309,14 +309,14 @@ private final class RemoteBridgeMessageHandler: NSObject, WKScriptMessageHandler
     guard message.name == RemoteWebViewBridge.handlerName else {
       return
     }
-    guard let request = RemoteWebViewBridge.notificationRequest(
+    guard let request = RemoteWebViewBridge.request(
       from: message.body,
       originURL: message.frameInfo.request.url,
       endpointURL: endpointURL
     ) else {
       return
     }
-    onNotification(request)
+    onBridgeRequest(request)
   }
 }
 

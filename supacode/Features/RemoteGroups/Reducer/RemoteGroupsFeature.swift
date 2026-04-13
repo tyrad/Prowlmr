@@ -39,6 +39,7 @@ struct RemoteGroupsFeature {
     case selectEndpoint(UUID)
     case receiveBridgeNotification(endpointID: UUID, title: String, body: String, tag: String?)
     case markNotificationRead(endpointID: UUID, notificationID: UUID)
+    case markNotificationsRead(endpointID: UUID, tag: String)
     case dismissAllNotifications
     case delegate(Delegate)
   }
@@ -170,6 +171,30 @@ struct RemoteGroupsFeature {
           return .none
         }
         notifications[index].isRead = true
+        state.notificationsByEndpointID[endpointID] = notifications
+        return .none
+
+      case .markNotificationsRead(let endpointID, let tag):
+        guard var notifications = state.notificationsByEndpointID[endpointID] else {
+          return .none
+        }
+
+        let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTag.isEmpty else {
+          return .none
+        }
+
+        var didChange = false
+        for index in notifications.indices
+        where notifications[index].tag == trimmedTag && !notifications[index].isRead {
+          notifications[index].isRead = true
+          didChange = true
+        }
+
+        guard didChange else {
+          return .none
+        }
+
         state.notificationsByEndpointID[endpointID] = notifications
         return .none
 

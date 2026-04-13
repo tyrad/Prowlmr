@@ -224,6 +224,77 @@ struct RemoteGroupsFeatureTests {
     #expect(notifications[1].isRead == true)
   }
 
+  @Test(.dependencies) func mark_remote_notifications_read_marks_all_matching_tags_for_endpoint() async throws {
+    let endpointID = UUID()
+    let otherEndpointID = UUID()
+    let firstMatching = RemotePageNotification(
+      id: UUID(),
+      endpointID: endpointID,
+      title: "First",
+      body: "Unread",
+      tag: "session:1",
+      createdAt: Date(timeIntervalSince1970: 10)
+    )
+    let secondMatching = RemotePageNotification(
+      id: UUID(),
+      endpointID: endpointID,
+      title: "Second",
+      body: "Unread",
+      tag: "session:1",
+      createdAt: Date(timeIntervalSince1970: 20)
+    )
+    let nonMatching = RemotePageNotification(
+      id: UUID(),
+      endpointID: endpointID,
+      title: "Third",
+      body: "Keep unread",
+      tag: "session:2",
+      createdAt: Date(timeIntervalSince1970: 30)
+    )
+    let otherEndpointNotification = RemotePageNotification(
+      id: UUID(),
+      endpointID: otherEndpointID,
+      title: "Elsewhere",
+      body: "Keep unread",
+      tag: "session:1",
+      createdAt: Date(timeIntervalSince1970: 40)
+    )
+    var state = RemoteGroupsFeature.State()
+    state.notificationsByEndpointID = [
+      endpointID: [firstMatching, secondMatching, nonMatching],
+      otherEndpointID: [otherEndpointNotification],
+    ]
+
+    let store = TestStore(initialState: state) {
+      RemoteGroupsFeature()
+    }
+
+    await store.send(.markNotificationsRead(endpointID: endpointID, tag: " session:1 ")) {
+      $0.notificationsByEndpointID[endpointID] = [
+        RemotePageNotification(
+          id: firstMatching.id,
+          endpointID: endpointID,
+          title: "First",
+          body: "Unread",
+          tag: "session:1",
+          isRead: true,
+          createdAt: Date(timeIntervalSince1970: 10)
+        ),
+        RemotePageNotification(
+          id: secondMatching.id,
+          endpointID: endpointID,
+          title: "Second",
+          body: "Unread",
+          tag: "session:1",
+          isRead: true,
+          createdAt: Date(timeIntervalSince1970: 20)
+        ),
+        nonMatching,
+      ]
+      $0.notificationsByEndpointID[otherEndpointID] = [otherEndpointNotification]
+    }
+  }
+
   @Test(.dependencies) func dismiss_all_remote_notifications_clears_all_endpoints() async {
     let firstEndpointID = UUID()
     let secondEndpointID = UUID()
@@ -258,10 +329,10 @@ struct RemoteGroupsFeatureTests {
     }
   }
 
-  @Test(.dependencies) func bridge_parser_accepts_same_origin_notify_payload_and_rejects_invalid_payloads() {
+  @Test(.dependencies) func bridge_parser_accepts_same_origin_notify_and_mark_read_payloads_and_rejects_invalid_payloads() {
     let endpointURL = URL(string: "https://example.com/mini-terminal/")!
 
-    let valid = RemoteWebViewBridge.notificationRequest(
+    let valid = RemoteWebViewBridge.request(
       from: [
         "type": "notify",
         "title": "  Task complete  ",
@@ -273,14 +344,16 @@ struct RemoteGroupsFeatureTests {
     )
     #expect(
       valid
-        == RemoteBridgeNotificationRequest(
-          title: "Task complete",
-          body: "Ready to review",
-          tag: "job-123"
+        == .notification(
+          RemoteBridgeNotificationRequest(
+            title: "Task complete",
+            body: "Ready to review",
+            tag: "job-123"
+          )
         )
     )
 
-    let bodyOnly = RemoteWebViewBridge.notificationRequest(
+    let bodyOnly = RemoteWebViewBridge.request(
       from: [
         "type": "notify",
         "title": "   ",
@@ -291,14 +364,26 @@ struct RemoteGroupsFeatureTests {
     )
     #expect(
       bodyOnly
-        == RemoteBridgeNotificationRequest(
-          title: "Body fallback",
-          body: "",
-          tag: nil
+        == .notification(
+          RemoteBridgeNotificationRequest(
+            title: "Body fallback",
+            body: "",
+            tag: nil
+          )
         )
     )
 
-    let crossOrigin = RemoteWebViewBridge.notificationRequest(
+    let markRead = RemoteWebViewBridge.request(
+      from: [
+        "type": "markRead",
+        "tag": "  session:42  ",
+      ],
+      originURL: URL(string: "https://example.com/jobs/7")!,
+      endpointURL: endpointURL
+    )
+    #expect(markRead == .markRead(RemoteBridgeMarkReadRequest(tag: "session:42")))
+
+    let crossOrigin = RemoteWebViewBridge.request(
       from: [
         "type": "notify",
         "title": "Ignored",
@@ -308,7 +393,7 @@ struct RemoteGroupsFeatureTests {
     )
     #expect(crossOrigin == nil)
 
-    let emptyMessage = RemoteWebViewBridge.notificationRequest(
+    let emptyMessage = RemoteWebViewBridge.request(
       from: [
         "type": "notify",
         "title": "   ",
@@ -319,7 +404,17 @@ struct RemoteGroupsFeatureTests {
     )
     #expect(emptyMessage == nil)
 
-    let unsupportedType = RemoteWebViewBridge.notificationRequest(
+    let missingTag = RemoteWebViewBridge.request(
+      from: [
+        "type": "markRead",
+        "tag": "   ",
+      ],
+      originURL: URL(string: "https://example.com/jobs/7")!,
+      endpointURL: endpointURL
+    )
+    #expect(missingTag == nil)
+
+    let unsupportedType = RemoteWebViewBridge.request(
       from: [
         "type": "ping",
         "title": "Ignored",

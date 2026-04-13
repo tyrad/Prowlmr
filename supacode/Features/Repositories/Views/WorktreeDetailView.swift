@@ -269,17 +269,29 @@ struct WorktreeDetailView: View {
         endpoint: remoteDetailContext.endpoint,
         reloadToken: remoteReloadToken,
         keepWebViewAlive: keepRemoteWebViewAlive,
-        onNotification: { request in
-          store.send(
-            .remoteGroups(
-              .receiveBridgeNotification(
-                endpointID: remoteDetailContext.endpoint.id,
-                title: request.title,
-                body: request.body,
-                tag: request.tag
+        onBridgeRequest: { request in
+          switch request {
+          case .notification(let notification):
+            store.send(
+              .remoteGroups(
+                .receiveBridgeNotification(
+                  endpointID: remoteDetailContext.endpoint.id,
+                  title: notification.title,
+                  body: notification.body,
+                  tag: notification.tag
+                )
               )
             )
-          )
+          case .markRead(let markRead):
+            store.send(
+              .remoteGroups(
+                .markNotificationsRead(
+                  endpointID: remoteDetailContext.endpoint.id,
+                  tag: markRead.tag
+                )
+              )
+            )
+          }
         }
       )
     } else if repositories.isShowingCanvas {
