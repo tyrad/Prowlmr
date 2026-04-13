@@ -6,6 +6,11 @@ import Sharing
 struct RemoteGroupsFeature {
   @ObservableState
   struct State: Equatable {
+    struct NotificationRowState: Equatable {
+      let notifications: [RemotePageNotification]
+      let showsNotificationIndicator: Bool
+    }
+
     @Shared(.appStorage("remoteGroups_endpoints")) var endpoints: [RemoteEndpoint] = []
     @Shared(.appStorage("remoteGroups_selection")) var selection: RemoteSelection = .none
     var notificationsByEndpointID: [UUID: [RemotePageNotification]] = [:]
@@ -14,6 +19,14 @@ struct RemoteGroupsFeature {
 
     func notifications(for endpointID: UUID) -> [RemotePageNotification] {
       notificationsByEndpointID[endpointID] ?? []
+    }
+
+    func notificationRowState(for endpointID: UUID) -> NotificationRowState {
+      let notifications = notifications(for: endpointID)
+      return NotificationRowState(
+        notifications: notifications,
+        showsNotificationIndicator: notifications.contains { !$0.isRead }
+      )
     }
   }
 

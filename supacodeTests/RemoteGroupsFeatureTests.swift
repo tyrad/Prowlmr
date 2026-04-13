@@ -7,6 +7,58 @@ import Testing
 
 @MainActor
 struct RemoteGroupsFeatureTests {
+  @Test func endpointNotificationRowStateUsesUnreadNotificationsOnly() {
+    let endpointID = UUID()
+    let readNotification = RemotePageNotification(
+      id: UUID(),
+      endpointID: endpointID,
+      title: "Read",
+      body: "done",
+      isRead: true,
+      createdAt: Date(timeIntervalSince1970: 10)
+    )
+    let unreadNotification = RemotePageNotification(
+      id: UUID(),
+      endpointID: endpointID,
+      title: "Unread",
+      body: "new",
+      isRead: false,
+      createdAt: Date(timeIntervalSince1970: 20)
+    )
+
+    var state = RemoteGroupsFeature.State()
+    state.notificationsByEndpointID = [
+      endpointID: [unreadNotification, readNotification]
+    ]
+
+    let rowState = state.notificationRowState(for: endpointID)
+
+    #expect(rowState.showsNotificationIndicator == true)
+    #expect(rowState.notifications == [unreadNotification, readNotification])
+  }
+
+  @Test func endpointNotificationRowStateHidesIndicatorWhenAllNotificationsAreRead() {
+    let endpointID = UUID()
+    let readNotification = RemotePageNotification(
+      id: UUID(),
+      endpointID: endpointID,
+      title: "Read",
+      body: "done",
+      isRead: true,
+      createdAt: Date(timeIntervalSince1970: 10)
+    )
+
+    var state = RemoteGroupsFeature.State()
+    state.notificationsByEndpointID = [
+      endpointID: [readNotification]
+    ]
+
+    let rowState = state.notificationRowState(for: endpointID)
+
+    #expect(rowState.showsNotificationIndicator == false)
+    #expect(rowState.notifications == [readNotification])
+  }
+
   @Test(.dependencies) func submit_endpoint_adds_and_selects_endpoint() async throws {
     let state = RemoteGroupsFeature.State()
     state.$endpoints.withLock {
