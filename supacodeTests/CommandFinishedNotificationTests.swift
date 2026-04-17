@@ -118,10 +118,10 @@ struct CommandFinishedNotificationTests {
   @Test func selectedFocusedSurfaceNotificationStaysUnreadWhenAppIsInactive() throws {
     let state = makeState()
     state.isSelected = { true }
-    state.isAppActive = { false }
 
     _ = state.createTab()
     let activeSurfaceId = try #require(state.activeSurfaceView?.id)
+    state.syncFocus(windowIsKey: false, windowIsVisible: true)
 
     state.handleCommandFinished(exitCode: 0, durationNs: 60_000_000_000, surfaceId: activeSurfaceId)
 
@@ -129,38 +129,18 @@ struct CommandFinishedNotificationTests {
     #expect(state.notifications.first?.isRead == false)
   }
 
-  @Test func incomingNotificationIsUnreadWhenAppIsInactive() {
-    #expect(
-      WorktreeTerminalState.shouldMarkIncomingNotificationRead(
-        isSelectedWorktree: true,
-        isFocusedSurface: true,
-        isAppActive: false
-      ) == false
-    )
-  }
+  @Test func selectedFocusedSurfaceNotificationIsReadWhenWindowIsKey() throws {
+    let state = makeState()
+    state.isSelected = { true }
 
-  @Test func incomingNotificationIsReadOnlyWhenSelectionFocusAndAppActivityAllMatch() {
-    #expect(
-      WorktreeTerminalState.shouldMarkIncomingNotificationRead(
-        isSelectedWorktree: true,
-        isFocusedSurface: true,
-        isAppActive: true
-      ) == true
-    )
-    #expect(
-      WorktreeTerminalState.shouldMarkIncomingNotificationRead(
-        isSelectedWorktree: false,
-        isFocusedSurface: true,
-        isAppActive: true
-      ) == false
-    )
-    #expect(
-      WorktreeTerminalState.shouldMarkIncomingNotificationRead(
-        isSelectedWorktree: true,
-        isFocusedSurface: false,
-        isAppActive: true
-      ) == false
-    )
+    _ = state.createTab()
+    let activeSurfaceId = try #require(state.activeSurfaceView?.id)
+    state.syncFocus(windowIsKey: true, windowIsVisible: true)
+
+    state.handleCommandFinished(exitCode: 0, durationNs: 60_000_000_000, surfaceId: activeSurfaceId)
+
+    #expect(state.notifications.count == 1)
+    #expect(state.notifications.first?.isRead == true)
   }
 
   // MARK: - Duration Formatting

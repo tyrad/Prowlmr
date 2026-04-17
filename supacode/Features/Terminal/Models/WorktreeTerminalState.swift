@@ -34,6 +34,8 @@ final class WorktreeTerminalState {
   private var commandFinishedNotificationEnabled = true
   private var commandFinishedNotificationThreshold = 10
   private var lastKeyInputTimeBySurface: [UUID: ContinuousClock.Instant] = [:]
+  private var windowIsKey = false
+  private var windowIsVisible = false
   var hasUnseenNotification: Bool {
     notifications.contains { !$0.isRead }
   }
@@ -43,7 +45,6 @@ final class WorktreeTerminalState {
     return notifications.contains { !$0.isRead && surfaceIds.contains($0.surfaceId) }
   }
   var isSelected: () -> Bool = { false }
-  var isAppActive: () -> Bool = { NSApp.isActive }
   var onNotificationReceived: ((String, String) -> Void)?
   var onNotificationIndicatorChanged: (() -> Void)?
   var onTabCreated: (() -> Void)?
@@ -277,6 +278,8 @@ final class WorktreeTerminalState {
   }
 
   func syncFocus(windowIsKey: Bool, windowIsVisible: Bool) {
+    self.windowIsKey = windowIsKey
+    self.windowIsVisible = windowIsVisible
     let selectedTabId = tabManager.selectedTabId
     var surfaceToFocus: GhosttySurfaceView?
     for (tabId, tree) in trees {
@@ -312,6 +315,20 @@ final class WorktreeTerminalState {
     let isVisible = isSelectedTab && windowIsVisible
     let isFocused = isVisible && windowIsKey && focusedSurfaceID == surfaceID
     return SurfaceActivity(isVisible: isVisible, isFocused: isFocused)
+  }
+
+  private func surfaceActivity(for surfaceId: UUID) -> SurfaceActivity {
+    guard let tabId = tabId(containing: surfaceId) else {
+      return SurfaceActivity(isVisible: false, isFocused: false)
+    }
+
+    return Self.surfaceActivity(
+      isSelectedTab: isSelected() && tabId == tabManager.selectedTabId,
+      windowIsVisible: windowIsVisible,
+      windowIsKey: windowIsKey,
+      focusedSurfaceID: focusedSurfaceIdByTab[tabId],
+      surfaceID: surfaceId
+    )
   }
 
   @discardableResult
@@ -536,6 +553,8 @@ final class WorktreeTerminalState {
   }
 
   func setAllSurfacesOccluded() {
+    windowIsKey = false
+    windowIsVisible = false
     for surface in surfaces.values {
       surface.setOcclusion(false)
       surface.focusDidChange(false)
@@ -891,31 +910,19 @@ final class WorktreeTerminalState {
     guard !(trimmedTitle.isEmpty && trimmedBody.isEmpty) else { return }
     if notificationsEnabled {
       let previousHasUnseen = hasUnseenNotification
-      let isRead = Self.shouldMarkIncomingNotificationRead(
-        isSelectedWorktree: isSelected(),
-        isFocusedSurface: isFocusedSurface(surfaceId),
-        isAppActive: isAppActive()
-      )
+      let activity = surfaceActivity(for: surfaceId)
       notifications.insert(
         WorktreeTerminalNotification(
           surfaceId: surfaceId,
           title: trimmedTitle,
           body: trimmedBody,
-          isRead: isRead
+          isRead: activity.isFocused
         ),
         at: 0
       )
       emitNotificationIndicatorIfNeeded(previousHasUnseen: previousHasUnseen)
     }
     onNotificationReceived?(trimmedTitle, trimmedBody)
-  }
-
-  static func shouldMarkIncomingNotificationRead(
-    isSelectedWorktree: Bool,
-    isFocusedSurface: Bool,
-    isAppActive: Bool
-  ) -> Bool {
-    isSelectedWorktree && isFocusedSurface && isAppActive
   }
 
   /// How recently the user must have typed for us to consider the exit user-initiated.
