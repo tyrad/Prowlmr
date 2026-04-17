@@ -115,6 +115,54 @@ struct CommandFinishedNotificationTests {
     #expect(state.notifications.count == 1)
   }
 
+  @Test func selectedFocusedSurfaceNotificationStaysUnreadWhenAppIsInactive() throws {
+    let state = makeState()
+    state.isSelected = { true }
+    state.isAppActive = { false }
+
+    _ = state.createTab()
+    let activeSurfaceId = try #require(state.activeSurfaceView?.id)
+
+    state.handleCommandFinished(exitCode: 0, durationNs: 60_000_000_000, surfaceId: activeSurfaceId)
+
+    #expect(state.notifications.count == 1)
+    #expect(state.notifications.first?.isRead == false)
+  }
+
+  @Test func incomingNotificationIsUnreadWhenAppIsInactive() {
+    #expect(
+      WorktreeTerminalState.shouldMarkIncomingNotificationRead(
+        isSelectedWorktree: true,
+        isFocusedSurface: true,
+        isAppActive: false
+      ) == false
+    )
+  }
+
+  @Test func incomingNotificationIsReadOnlyWhenSelectionFocusAndAppActivityAllMatch() {
+    #expect(
+      WorktreeTerminalState.shouldMarkIncomingNotificationRead(
+        isSelectedWorktree: true,
+        isFocusedSurface: true,
+        isAppActive: true
+      ) == true
+    )
+    #expect(
+      WorktreeTerminalState.shouldMarkIncomingNotificationRead(
+        isSelectedWorktree: false,
+        isFocusedSurface: true,
+        isAppActive: true
+      ) == false
+    )
+    #expect(
+      WorktreeTerminalState.shouldMarkIncomingNotificationRead(
+        isSelectedWorktree: true,
+        isFocusedSurface: false,
+        isAppActive: true
+      ) == false
+    )
+  }
+
   // MARK: - Duration Formatting
 
   @Test func formatDurationSeconds() {

@@ -43,6 +43,7 @@ final class WorktreeTerminalState {
     return notifications.contains { !$0.isRead && surfaceIds.contains($0.surfaceId) }
   }
   var isSelected: () -> Bool = { false }
+  var isAppActive: () -> Bool = { NSApp.isActive }
   var onNotificationReceived: ((String, String) -> Void)?
   var onNotificationIndicatorChanged: (() -> Void)?
   var onTabCreated: (() -> Void)?
@@ -890,7 +891,11 @@ final class WorktreeTerminalState {
     guard !(trimmedTitle.isEmpty && trimmedBody.isEmpty) else { return }
     if notificationsEnabled {
       let previousHasUnseen = hasUnseenNotification
-      let isRead = isSelected() && isFocusedSurface(surfaceId)
+      let isRead = Self.shouldMarkIncomingNotificationRead(
+        isSelectedWorktree: isSelected(),
+        isFocusedSurface: isFocusedSurface(surfaceId),
+        isAppActive: isAppActive()
+      )
       notifications.insert(
         WorktreeTerminalNotification(
           surfaceId: surfaceId,
@@ -903,6 +908,14 @@ final class WorktreeTerminalState {
       emitNotificationIndicatorIfNeeded(previousHasUnseen: previousHasUnseen)
     }
     onNotificationReceived?(trimmedTitle, trimmedBody)
+  }
+
+  static func shouldMarkIncomingNotificationRead(
+    isSelectedWorktree: Bool,
+    isFocusedSurface: Bool,
+    isAppActive: Bool
+  ) -> Bool {
+    isSelectedWorktree && isFocusedSurface && isAppActive
   }
 
   /// How recently the user must have typed for us to consider the exit user-initiated.
