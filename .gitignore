@@ -69,3 +69,9 @@ Resources/terminfo
 .env
 build/
 .DS_Store
+Derived/
+supacode.xcworkspace/
+supacode.xcodeproj/xcshareddata/xcschemes/GhosttyKit.xcscheme
+supacode.xcodeproj/xcshareddata/xcschemes/SupacodeSettingsFeature.xcscheme
+supacode.xcodeproj/xcshareddata/xcschemes/SupacodeSettingsShared.xcscheme
+supacode.xcodeproj/xcshareddata/xcschemes/supacode-cli.xcscheme
